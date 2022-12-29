@@ -1,6 +1,6 @@
 src/modules/*
 CARLA/*
-
+.vscode/
 
 
 # Byte-compiled / optimized / DLL files

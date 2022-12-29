@@ -8,8 +8,9 @@ class TFModelAdult(MLModel):
 
     def __init__(self, data) -> None:
         super().__init__(data)
-        self._mymodel = self.__load_model()
         self.__load_constraints()
+        self._mymodel = self.__load_model()
+        
 
     # List of the feature order the ml model was trained on
     @property
@@ -29,16 +30,24 @@ class TFModelAdult(MLModel):
     # The predict function outputs
     # the continuous prediction of the model
     def predict(self, x):
+
+        if isinstance(x, pd.DataFrame):
+            x = x[self.feature_input_order]
+
         return self._mymodel.predict(x)
 
     # The predict_proba method outputs
     # the prediction as class probabilities
     def predict_proba(self, x):
+
+        if isinstance(x, pd.DataFrame):
+            x = x[self.feature_input_order]
+
         return self._mymodel.predict_proba(x)
 
     def __load_model(self, filepath: str = '../models/adult_NN.h5') -> tf.keras.Model:
         model = tf.keras.Sequential()
-        model.add(tf.keras.layers.Input((85,)))
+        model.add(tf.keras.layers.Input((self.constraints['features_count'],)))
         model.add(tf.keras.layers.Dense(64, activation='relu'))
         model.add(tf.keras.layers.Dropout(0.2))
         model.add(tf.keras.layers.Dense(32, activation='relu'))
@@ -51,7 +60,7 @@ class TFModelAdult(MLModel):
 
         return model
 
-    def __load_constraints(self, filepath: str = '../data/adult_constraints') -> Dict:
+    def __load_constraints(self, filepath: str = '../data/adult_constraints.json') -> Dict:
         with open('../data/adult_constraints.json') as f:
             self.constraints = json.load(f)
         return self.constraints
