@@ -10,7 +10,9 @@ class TFModelAdult(MLModel):
         super().__init__(data)
         self.__load_constraints()
         self._mymodel = self.__load_model()
-        
+    
+    def __call__(self, data):
+        return self._mymodel(data)
 
     # List of the feature order the ml model was trained on
     @property
@@ -29,12 +31,25 @@ class TFModelAdult(MLModel):
 
     # The predict function outputs
     # the continuous prediction of the model
-    def predict(self, x):
-
+    def predict(self, x):   
         if isinstance(x, pd.DataFrame):
-            x = x[self.feature_input_order]
+            x = x[self.feature_input_order].to_numpy()
+            print(x)
+            
+
+        if isinstance(x, tf.Variable):
+            #print(f'X, type: {type} data: {x}')
+            with tf.compat.v1.Session() as sess:
+                sess.run(tf.compat.v1.global_variables_initializer())
+                x = x.eval(session=sess)
+            #print(f'X, type: {type} data: {x}')
 
         return self._mymodel.predict(x)
+
+        
+    # @tf.function(experimental_relax_shapes=True)
+    # def predictTensor(self, x):
+    #     self._mymodel.predict(x, steps=1)
 
     # The predict_proba method outputs
     # the prediction as class probabilities
@@ -43,20 +58,23 @@ class TFModelAdult(MLModel):
         if isinstance(x, pd.DataFrame):
             x = x[self.feature_input_order]
 
-        return self._mymodel.predict_proba(x)
+        return self._mymodel.predict(x)
 
-    def __load_model(self, filepath: str = '../models/adult_NN.h5') -> tf.keras.Model:
-        model = tf.keras.Sequential()
-        model.add(tf.keras.layers.Input((self.constraints['features_count'],)))
-        model.add(tf.keras.layers.Dense(64, activation='relu'))
-        model.add(tf.keras.layers.Dropout(0.2))
-        model.add(tf.keras.layers.Dense(32, activation='relu'))
-        model.add(tf.keras.layers.Dropout(0.2))
-        model.add(tf.keras.layers.Dense(16, activation='relu'))
-        model.add(tf.keras.layers.Dropout(0.2))
-        model.add(tf.keras.layers.Dense(2, activation='softmax'))
+    def __load_model(self, filepath: str = '../models/adult_NN') -> tf.keras.Model:
+        # model = tf.keras.Sequential()
+        # model.add(tf.keras.layers.Input((self.constraints['features_count'],)))
+        # model.add(tf.keras.layers.Dense(64, activation='relu'))
+        # model.add(tf.keras.layers.Dropout(0.2))
+        # model.add(tf.keras.layers.Dense(32, activation='relu'))
+        # model.add(tf.keras.layers.Dropout(0.2))
+        # model.add(tf.keras.layers.Dense(16, activation='relu'))
+        # model.add(tf.keras.layers.Dropout(0.2))
+        # model.add(tf.keras.layers.Dense(2, activation='softmax'))
 
-        model.load_weights(filepath)
+        # model.load_weights(filepath)
+
+        model = tf.keras.models.load_model(filepath)
+        print(model.summary())
 
         return model
 
