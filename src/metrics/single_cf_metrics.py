@@ -1,7 +1,7 @@
 from typing import Union
 import numpy.typing as npt
 import numpy as np
-from distance_functions import getL1distanceFloat, getL2distanceFloat, getL1distanceMatrix, getL2distanceMatrix
+from .distance_functions import getL1distanceFloat, getL2distanceFloat, getL1distanceMatrix, getL2distanceMatrix
 
 
 def validity(x_class: int | float, cf_class: int | float) -> bool:
