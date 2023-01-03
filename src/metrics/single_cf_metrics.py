@@ -1,7 +1,10 @@
 from typing import Union
 import numpy.typing as npt
 import numpy as np
+from sklearn.neighbors import KNeighborsClassifier
+
 from .distance_functions import getL1distanceFloat, getL2distanceFloat, getL1distanceMatrix, getL2distanceMatrix
+
 
 
 def validity(x_class: int | float, cf_class: int | float) -> bool:
@@ -39,9 +42,24 @@ def feasibility(x: npt.ArrayLike, cf: npt.ArrayLike, training_data: npt.ArrayLik
             shortest = min(shortest, getL2distanceMatrix(cf, z))
     return shortest
 
-def discriminative_power(x: npt.ArrayLike, cf: npt.ArrayLike, training_data: npt.ArrayLike, training_data_labels: npt.ArrayLike, k: int = 10) -> float:
-    '''NOT IMPLEMENTED Reclassification power of k nearest neighbors from `training data`.'''
-    NotImplementedError
+def discriminative_power(x: npt.ArrayLike, x_label: npt.ArrayLike, cf: npt.ArrayLike, cf_label: npt.ArrayLike, training_data: npt.ArrayLike, training_data_labels: npt.ArrayLike, k: int = 10) -> float:
+    '''
+    Reclassification power of `k` nearest neighbors from `training data`.  
+
+    Returns the number of `k` nearest neighbors from training data with same label as `cf` divided by `k`.
+    '''
+    knn = KNeighborsClassifier(n_neighbors=k)
+    knn.fit(training_data, training_data_labels)
+
+    neighbors_indices = knn.kneighbors(cf.reshape((1, -1)), return_distance=False)
+
+    neighbors_labels = training_data_labels[neighbors_indices]
+
+    # Get number of neighbors with same label as cf
+    same_neigh_count = np.sum(neighbors_labels == cf_label)
+
+    return same_neigh_count / k
+
 
 def preference_dcg_score(x: npt.ArrayLike, cf: npt.ArrayLike, preference: npt.ArrayLike, k: int = 5) -> float:
     '''
@@ -106,6 +124,22 @@ if __name__ == '__main__':
             np.array([1,0,0]),
             np.array([1,1,0])
         ])
+    ))
+
+    print('Test discriminative power')
+    print(discriminative_power(
+        np.array([1,1,0]),
+        0,
+        np.array([1,1,1]),
+        1,
+        np.array([
+            np.array([0,0,0]),
+            np.array([1,0,0]),
+            np.array([1,1,0]),
+            np.array([0,1,1]),
+        ]),
+        np.array([0, 0, 0, 1]),
+        k = 3
     ))
 
     print('Test preference dcg score')
