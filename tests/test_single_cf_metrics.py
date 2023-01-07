@@ -44,7 +44,7 @@ def test_discriminative_power():
         ]),
         np.array([0, 0, 0, 1, 1, 1]),
         k = 4
-    ) == 0.75
+    ) == 0.5
 
 def test_preference_dcg_score():
     assert preference_dcg_score(

@@ -42,13 +42,24 @@ def feasibility(x: npt.ArrayLike, cf: npt.ArrayLike, training_data: npt.ArrayLik
             shortest = min(shortest, getL2distanceMatrix(cf, z))
     return shortest
 
-def discriminative_power(x: npt.ArrayLike, x_label: npt.ArrayLike, cf: npt.ArrayLike, cf_label: npt.ArrayLike, training_data: npt.ArrayLike, training_data_labels: npt.ArrayLike, k: int = 10) -> float:
+def discriminative_power(x: npt.ArrayLike, x_label: npt.ArrayLike, cf: npt.ArrayLike, cf_label: npt.ArrayLike, _training_data: npt.ArrayLike, _training_data_labels: npt.ArrayLike, k: int = 10) -> float:
     '''
-    Reclassification power of `k` nearest neighbors from `training data`.  
+    Reclassification power of `k` nearest (L1) neighbors from `training data`.  
 
     Returns the number of `k` nearest neighbors from training data with same label as `cf` divided by `k`.
     '''
-    knn = KNeighborsClassifier(n_neighbors=k)
+    training_data = _training_data.copy()
+    training_data_labels = _training_data_labels.copy()
+
+    knn = KNeighborsClassifier(n_neighbors=k, p=1)
+
+    # Take only data different than x. 
+    # This is done because we don't want to include x in the nearest neighbors
+    mask = ~np.all(training_data != x, axis=1)
+    training_data = training_data[mask, :]
+    training_data_labels = training_data_labels[mask]
+    
+
     knn.fit(training_data, training_data_labels)
 
     neighbors_indices = knn.kneighbors(cf.reshape((1, -1)), return_distance=False)
