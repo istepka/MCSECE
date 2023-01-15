@@ -44,6 +44,7 @@ def get_scores(counterfactuals, x, train_data, train_labels, mask) -> pd.DataFra
 # Very slow for many datapoints.  Fastest for many costs, most readable
 def is_pareto_efficient_dumb(costs):
     """
+    DO NOT USE, WRONG ANSWERS
     Find the pareto-efficient points
     :param costs: An (n_points, n_costs) array
     :return: A (n_points, ) boolean array, indicating whether each point is Pareto efficient
@@ -86,5 +87,30 @@ def filter_non_actionable(counterfactuals: pd.DataFrame, query_instance: pd.Data
             true_indices.append(i)
    
     return counterfactuals.take(true_indices)
+
+def get_pareto_frontier_mask(to_check: np.ndarray) -> np.ndarray:
+    '''  
+    Returns a mask of the pareto frontier of the input array.
+    
+    Both criteria are assumed to be minimized.
+    '''
+    assert to_check.shape[1] == 2, "Can only handle 2D arrays"
+
+    arr = to_check.copy()
+
+    non_dominated_mask = np.zeros(arr.shape[0], dtype=bool)
+
+    for i, (x, y) in enumerate(arr):
+        
+        # mark all points that are fully dominated by the current point on all criteria
+        non_dominated_mask[:i] = np.logical_or(non_dominated_mask[:i], np.logical_and(arr[:i, 0] > x, arr[:i, 1] > y))
+        non_dominated_mask[i+1:] = np.logical_or(non_dominated_mask[i+1:], np.logical_and( arr[i+1:, 0] > x, arr[i+1:, 1] > y))
+
+        # mark all points that are fully dominated by the current point on at least one criteria
+        non_dominated_mask[:i]  = np.logical_or(non_dominated_mask[:i], np.logical_or(np.logical_and(arr[:i, 0] > x, arr[:i, 1] >= y), np.logical_and(arr[:i, 0] >= x, arr[:i, 1] > y)))
+        non_dominated_mask[i+1:] = np.logical_or(non_dominated_mask[i+1:], np.logical_or(np.logical_and(arr[i+1:, 0] > x, arr[i+1:, 1] >= y), np.logical_and(arr[i+1:, 0] >= x, arr[i+1:, 1] > y)))
+
+
+    return ~non_dominated_mask
    
     
