@@ -27,13 +27,13 @@ class AlibiWachter:
             self.cf = Counterfactual(pred_fn, query_instance_shape, distance_fn='l1', target_proba=1.0,
                                 target_class='other', max_iter=100, early_stop=50, lam_init=1e-3,
                                 max_lam_steps=15, tol=0.4, learning_rate_init=0.1,
-                                feature_range=(0, 1), eps=0.3, init='identity',
+                                feature_range=(0, 1), eps=0.1, init='identity',
                                 decay=True, write_dir=None, debug=False)
         else: #TF
             model = tf.keras.models.load_model(model_path)
 
             self.cf = Counterfactual(model, query_instance_shape, distance_fn='l1', target_proba=1.0,
-                                target_class='other', max_iter=1000, early_stop=50, lam_init=1e-1,
+                                target_class='other', max_iter=1000, early_stop=100, lam_init=1e-1,
                                 max_lam_steps=15, tol=0.4, learning_rate_init=0.1,
                                 feature_range=(0, 1), eps=0.1, init='identity',
                                 decay=True, write_dir=None, debug=False)

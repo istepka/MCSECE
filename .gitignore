@@ -4,6 +4,10 @@ CARLA/*
 archive.ics.*
 images/
 
+*s_adult_tensorflow*
+*g_adult_tensorflow*
+*s_adult_sklearn*
+*g_adult_sklearn*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
