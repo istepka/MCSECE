@@ -53,7 +53,11 @@ def train_supplementary_NN(train_data_normalized: np.ndarray, model_proba_predic
 
 class CfecEceModel:
 
-    def __init__(self, train_data_normalized, constraints_dictionary, model_path=None, model_backend=None, fimap_load_s_g_full_id=None, fimap_save_s_q_prefix: str = None) -> None:
+    def __init__(self, train_data_normalized, constraints_dictionary, 
+    model_path=None, model_backend=None, 
+    fimap_load_s_g_full_id=None, fimap_save_s_q_prefix: str = None,
+    columns_to_change: List[str] = None
+    ) -> None:
         self.train_data = train_data_normalized
         self.constraints = None
         self.create_constraints(constraints_dictionary)
@@ -75,10 +79,10 @@ class CfecEceModel:
         if model_path:      
             for n_changed in list(range(1, 15)):
                 if model_backend == 'tensorflow':
-                    cadex = Cadex(model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=20)
+                    cadex = Cadex(model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=20, columns_to_change=columns_to_change)
                     cadexes.append(cadex)
                 if model_backend == 'sklearn':
-                    cadex = Cadex(supp_model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=20)
+                    cadex = Cadex(supp_model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=20, columns_to_change=columns_to_change)
                     cadexes.append(cadex)
         
         # Prepare fimap models
@@ -93,7 +97,6 @@ class CfecEceModel:
         for i in range(len(fimap_hyperparameters)):
             tau, l1, l2 = fimap_hyperparameters[i]
             fimap = Fimap(tau, l1, l2, constraints=self.constraints, use_mapper=True, fimap_load_s_g_full_id=fimap_load_s_g_full_id, fimap_save_s_q_prefix=fimap_save_s_q_prefix)
-            print(self.train_data.shape, model_predictions.shape)
 
             # Fit only if we do not want to load already trained models
             #if not fimap_load_s_g_full_id:
@@ -154,7 +157,7 @@ class CfecEceModel:
         # for feature, monotonicity in features_monotonicity.items():
         #     constraints.append(ValueMonotonicity([feature], monotonicity))
 
-        print('Constraints: ', constraints)
+        print('Constraints: \n', constraints)
 
         self.constraints = constraints
         return constraints
