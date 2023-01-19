@@ -29,7 +29,7 @@ class AlibiWachter:
             pred_fn = lambda x: np.array(model.predict_proba(x)[0])
 
             self.cf = Counterfactual(pred_fn, query_instance_shape, distance_fn='l1', target_proba=target_proba,
-                                target_class='other', max_iter=40, early_stop=5, lam_init=0.001,
+                                target_class='other', max_iter=40, early_stop=5, lam_init=0.0001,
                                 max_lam_steps=4, tol=0.3, learning_rate_init=1.0,
                                 feature_range=(0.0, 1.0), eps=eps, init='identity', 
                                 decay=True, write_dir=None, debug=False)
@@ -37,8 +37,8 @@ class AlibiWachter:
             model = tf.keras.models.load_model(model_path)
 
             self.cf = Counterfactual(model, query_instance_shape, distance_fn='l1', target_proba=target_proba,
-                                target_class='other', max_iter=100, early_stop=20, lam_init=0.1,
-                                max_lam_steps=10, tol=0.2, learning_rate_init=0.1,
+                                target_class='other', max_iter=1000, early_stop=50, lam_init=0.1,
+                                max_lam_steps=10, tol=0.01, learning_rate_init=0.1,
                                 feature_range=(0.0, 1.0), eps=eps, init='identity',
                                 decay=True, write_dir=None, debug=False)
 

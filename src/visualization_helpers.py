@@ -79,8 +79,7 @@ def filter_non_actionable(counterfactuals: pd.DataFrame, query_instance: pd.Data
     print(counterfactuals[non_actionable_features].shape)
     print(query_instance[non_actionable_features].shape)
     
-    true_mask = counterfactuals[non_actionable_features].to_numpy()[:] == query_instance[non_actionable_features].to_numpy()
-
+    true_mask = np.equal(counterfactuals[non_actionable_features].to_numpy(), query_instance[non_actionable_features].to_numpy())
     true_indices = []
     for i, true in enumerate(true_mask.all(axis=1)):
         if true: 
@@ -112,5 +111,52 @@ def get_pareto_frontier_mask(to_check: np.ndarray) -> np.ndarray:
 
 
     return ~non_dominated_mask
+
+
+def filter_non_actionable_features(counterfactuals: pd.DataFrame, query_instance: pd.DataFrame, non_actionable_features: list, categorical_features: list, continous_features: list):
+    # filter if the counterfactual is not actionable
+    # counterfactual is not actionable if it has any non-actionable features changed in respect to the query instance
+    # non-actionable features are features that are not allowed to be changed in the counterfactual
+
+    non_actionable_cat = list(filter(lambda x: x in categorical_features, non_actionable_features))
+    print('nonactionablecat', non_actionable_cat)
+    non_actionable_cont = list(filter(lambda x: x in continous_features, non_actionable_features))
+    print('nonactionablecat', non_actionable_cont)
+
+    cf_cat = counterfactuals[non_actionable_cat].to_numpy()
+    x_cat = query_instance[non_actionable_cat].to_numpy()
+
+    cf_cont = counterfactuals[non_actionable_cont].to_numpy()
+    x_cont = query_instance[non_actionable_cont].to_numpy()
+
+    mask_cont = np.all(np.isclose(cf_cont, x_cont, atol=1e-5), axis=1)
+    mask_cat = np.all(np.equal(cf_cat, x_cat), axis=1)
+
+    # 1 if actionable 0 if not
+    mask_actionable = mask_cat & mask_cont
+
+    true_indices = []
+    for i, true in enumerate(mask_actionable):
+        if true: 
+            true_indices.append(i)
    
+    return counterfactuals.take(true_indices)
+
+
+if __name__ == '__main__':
+
+    cf = np.array([
+        [1,2,3],
+        [1,4,5]
+    ], dtype='float64')
+
+    query = np.array([[1,2,3]])
+
+    print(np.equal(cf, query))
+    print()
+    print(np.all(np.isclose(cf, query, atol=1e-5), axis=1))
+
+    print(filter_non_actionable_features())
+
+    
     
