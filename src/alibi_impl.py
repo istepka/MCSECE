@@ -11,7 +11,11 @@ tf.compat.v1.disable_eager_execution()
 # model = tf.keras.models.load_model('../models/adult_NN/')
 
 class AlibiWachter:
-    def __init__(self, model_path, model_type, query_instance_shape, target_proba=1.0, eps=None) -> None:
+    def __init__(self, model_path, model_type, 
+                query_instance_shape, target_proba=1.0, eps=None, feature_ranges=None,
+                max_iter=100, max_lam_steps=10, lam_init=0.0001, learning_rate_init=1.0,
+                early_stop = 5, tolerance=0.3
+        ) -> None:
         '''
         model_path: full path
         model_type: sklearn or tensorflow
@@ -19,8 +23,10 @@ class AlibiWachter:
         eps: very important parameter - how each variable can be changed at one step. should be np.array of these values e.g. [0.1, 0.1, 1.0, 1.0]. 
         if this parameter is omitted then probably sklearn will work for very long time
         '''
-        if eps is None:
-            eps = 0.01
+        # if eps is None:
+        #     eps = 0.01
+        if feature_ranges is None:
+            feature_ranges = (0.0, 1.0)
 
         if model_type == 'sklearn':
             with open(model_path ,'rb') as f:
@@ -29,9 +35,9 @@ class AlibiWachter:
             pred_fn = lambda x: np.array(model.predict_proba(x)[0])
 
             self.cf = Counterfactual(pred_fn, query_instance_shape, distance_fn='l1', target_proba=target_proba,
-                                target_class='other', max_iter=40, early_stop=5, lam_init=0.0001,
-                                max_lam_steps=4, tol=0.3, learning_rate_init=1.0,
-                                feature_range=(0.0, 1.0), eps=eps, init='identity', 
+                                target_class='other', max_iter=max_iter, early_stop=early_stop, lam_init=lam_init,
+                                max_lam_steps=max_lam_steps, tol=tolerance, learning_rate_init=learning_rate_init,
+                                feature_range=feature_ranges, init='identity', 
                                 decay=True, write_dir=None, debug=False)
         else: #TF
             model = tf.keras.models.load_model(model_path)
@@ -39,7 +45,7 @@ class AlibiWachter:
             self.cf = Counterfactual(model, query_instance_shape, distance_fn='l1', target_proba=target_proba,
                                 target_class='other', max_iter=1000, early_stop=50, lam_init=0.1,
                                 max_lam_steps=10, tol=0.01, learning_rate_init=0.1,
-                                feature_range=(0.0, 1.0), eps=eps, init='identity',
+                                feature_range=feature_ranges, init='identity',
                                 decay=True, write_dir=None, debug=False)
 
     def generate_counterfactuals(self, query_instance_norm: pd.DataFrame | np.ndarray):
