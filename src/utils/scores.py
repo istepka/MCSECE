@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import numpy.typing as npt
+from tqdm import tqdm
 
 class ScoreCalculator:
 
@@ -27,6 +28,50 @@ class ScoreCalculator:
         self.ranges: npt.NDArray = None
         self.get_ranges()
 
+        # Fit flag
+        self.fit_done = False
+        self.cfs: npt.NDArray = None
+
+    def fit(self, counterfactuals: npt.NDArray, counterfactuals_predictions: npt.NDArray, x: npt.NDArray, x_predicted_class: float | int) -> None:
+        '''
+        counterfactuals: np array of shape (n,m)
+        x: one instance of shape (m,)
+        '''
+        mask_without_x = np.ones(self.data.shape[0])
+        
+        x_cont = x[self.cont_ind].astype('float64')
+        x_cat = x[self.cat_ind]
+
+        for i, (cont, cat) in enumerate(zip(self.cont_data, self.cat_data)):
+            if np.allclose(x_cont, cont) and np.array_equal(x_cat, cat):
+                mask_without_x[i] = 0
+            
+        self.data_without_x = self.data[mask_without_x.astype('bool')]
+        self.data_predictions_without_x = self.data_predictions[mask_without_x.astype('bool')]
+
+        self.distances = np.zeros((counterfactuals.shape[0], self.data_without_x.shape[0]))
+        self.distances_predictions_map = np.zeros((counterfactuals.shape[0], self.data_predictions_without_x.shape[0]))
+
+
+        for i, cf in enumerate(counterfactuals):
+            self.distances[i] = self.heom(self.data_without_x, cf)
+
+            sort_indices = np.argsort(self.distances[i])
+
+            self.distances[i] = np.take(self.distances[i], sort_indices)
+            self.distances_predictions_map[i] = np.take(self.data_predictions_without_x, sort_indices)
+            
+
+        self.cfs = counterfactuals
+        self.x = x 
+        self.cfs_predictions = counterfactuals_predictions
+        self.x_preditions = x_predicted_class
+
+        self.fit_done = True
+
+        print('Fit completed')
+
+
 
     def get_ranges(self) -> None:
         '''
@@ -42,15 +87,17 @@ class ScoreCalculator:
         '''
         Calculate HEOM distance between x and y. 
         X and Y should not be normalized. 
+        X should be (n, m) dimensional.
+        Y should be 1-D array.
         Ranges is max-min on each continous variables (order matters). 
         '''
-        distance = 0.0
+        distance = np.zeros(x.shape[0])
 
         # Continous |x-y| / range
-        distance += np.sum(np.abs(x[self.cont_ind].astype('float64') - y[self.cont_ind].astype('float64')) / self.ranges)
+        distance += np.sum(np.abs(x[:, self.cont_ind].astype('float64') - y[self.cont_ind].astype('float64')) / self.ranges, axis=1)
 
         # Categorical - overlap
-        distance += np.sum(~np.equal(x[self.cat_ind], y[self.cat_ind]))
+        distance += np.sum(~np.equal(x[:, self.cat_ind], y[self.cat_ind]), axis=1)
 
         return distance
 
@@ -65,22 +112,18 @@ class ScoreCalculator:
         pass
 
 
-    def feasibility(self, cf: npt.NDArray, x: npt.NDArray) -> float:
+    def feasibility(self) -> float:
         '''
-        Calculate feasibility as min distance between `cf` any datapoint (different than `x`) from training data.
+        Calculate feasibility as min distance between `cfs` any datapoint (different than `x`) from training data.
         Distance metric is HEOM. 
 
         The lower the better
         '''
-        best_d = np.inf
-        for y in self.data:
-            d = self.heom(cf, y)
-            if d < best_d and not np.all(np.equal(x, y)):
-                best_d = d
+        best_d = self.distances[:, 0]
         return best_d
     
 
-    def feasibility_k_neighbors(self, cf: npt.NDArray, x: npt.NDArray, k_neighbors: int = 50) -> float:  
+    def feasibility_k_neighbors(self, k_neighbors: int = 50) -> float:  
         '''
         Same as feasibility, but averaged over k-nearest-neighbors. So it is sum of distances to k-nearest-neighbors / k.  
         It should aim to measure close the counterfactual is to the training data.
@@ -89,20 +132,12 @@ class ScoreCalculator:
         '''
         assert self.data.shape[0] > k_neighbors, "Cannot calculate feasibility_k_neighbors because k_neighbors parameter is greater than the number of datapoints"
         
-        distances = list()
+        feas = np.sum(self.distances[:, 0:k_neighbors], axis=1) / k_neighbors
 
-        for y in self.data:
-            if not np.all(np.equal(x, y)): # Dont add x to the list of distances
-                d = self.heom(cf, y)
-                distances += [d]
-        
-        distances.sort()
-        top_k = np.array(distances[:k_neighbors], dtype='float64')
-
-        return np.sum(top_k) / k_neighbors
+        return feas
 
 
-    def features_changed(self, cf: npt.NDArray, x: npt.NDArray, float_precision: float = 1e-5) -> float:
+    def features_changed(self, float_precision: float = 1e-5) -> float:
         '''
         Calculate the number of features that changed between counterfactual and original instance.   
 
@@ -110,53 +145,41 @@ class ScoreCalculator:
 
         The lower the better
         '''
-        fc = 0.0
+        fc = np.zeros(self.cfs.shape[0])
+        m = self.cfs.shape[1]
 
-        # Continous
-        fc += np.sum(~np.isclose(cf[self.cont_ind].astype('float64'), x[self.cont_ind].astype('float64'), atol=float_precision))
+        for i, cf in enumerate(self.cfs):
+            # Continous
+            fc[i] += np.sum(~np.isclose(cf[self.cont_ind].astype('float64'), self.x[self.cont_ind].astype('float64'), atol=float_precision))
 
-        # Categorical
-        fc += np.sum(~np.equal(cf[self.cat_ind], x[self.cat_ind]))
+            # Categorical
+            fc[i] += np.sum(~np.equal(cf[self.cat_ind], self.x[self.cat_ind]))
 
-        return fc / len(cf)
+        return fc / m
 
 
-    def proximity(self, cf: npt.NDArray, x: npt.NDArray) -> float:
+    def proximity(self) -> float:
         '''
-        Proxmity is the distance from counterfactual `cf` to its original instance `x`.  
+        Proxmity is the distance from counterfactuals `cfs` to its original instance `x`.  
 
         As a distance function we use HEOM.  
 
         The lower the better.
         '''
-        return self.heom(cf, x)
+        return self.heom(self.cfs, self.x)
 
 
-    def discriminative_power(self, cf: npt.NDArray, cf_predicted_class: npt.NDArray, x: npt.NDArray, x_predicted_class: npt.NDArray, k_neighbors: int = 10) -> float:
+    def discriminative_power(self, k_neighbors: int = 10) -> float:
         '''
         Reclassification rate of its k nearest neighbors. Neighbors are defined with HEOM distance metric.  
 
         The higher the better.
         '''
         assert self.data.shape[0] > k_neighbors, "Cannot calculate discriminative power because k_neighbors parameter is greater than the number of datapoints"
-
-        distances = list()
-
-        for y, yclass in zip(self.data, self.data_predictions):
-            if not np.all(np.equal(x, y)): # Dont add x to the list of distances
-                d = self.heom(cf, y)
-                distances += [(d, yclass)]
-        
-        distances.sort(key=lambda x: x[0])
-
-        # Take predicted classes of top_k distances
-        top_k = np.array(distances[:k_neighbors], dtype='float64')[:, 1]
-  
-        rate = np.sum(top_k == float(cf_predicted_class)) / k_neighbors
-
+        rate= np.sum(self.distances_predictions_map[:, 0:k_neighbors] == self.cfs_predictions.reshape(-1, 1), axis=1) / k_neighbors
         return rate
 
-    def dcg(self, cf: npt.NDArray, x:npt.NDArray, preference_ranking: npt.NDArray) -> float:
+    def dcg(self, preference_ranking: npt.NDArray) -> float:
         '''
         Calculate the adaptation of dcg metric. Calculate the relevance of feature changes among preferred features.
         Changes calculated as featurewise HEOM.
@@ -166,18 +189,18 @@ class ScoreCalculator:
         The higher the better
         '''
 
-        changes = np.zeros_like(cf, dtype='float64')
+        changes = np.zeros_like(self.cfs, dtype='float64')
 
-        # Continous
-        changes[self.cont_ind] = np.abs(cf[self.cont_ind].astype('float64') - x[self.cont_ind].astype('float64')) / self.ranges
-        
-        # Categorical
-        changes[self.cat_ind] = ~np.equal(cf[self.cat_ind], x[self.cat_ind])
+        changes[:, self.cont_ind] += np.abs(self.cfs[:, self.cont_ind].astype('float64') - self.x[self.cont_ind].astype('float64')) / self.ranges
+
+        # Categorical - overlap
+        changes[:, self.cat_ind] += ~np.equal(self.cfs[:, self.cat_ind], self.x[self.cat_ind])
 
         # Calculate DCG score
-        dcg_score = 0.0
+        dcg_score = np.zeros(self.cfs.shape[0])
+
         for i, index in enumerate(preference_ranking, 1):
-            dcg_score += changes[index] / np.log2(i + 1)
+            dcg_score += changes[:, index] / np.log2(i + 1)
 
         return dcg_score
 
@@ -215,40 +238,35 @@ def get_scores(cfs: npt.NDArray, cf_predicted_classes: npt.NDArray,
         _training_data = training_data.copy()
     
     # Init score calculator
-    calculator = ScoreCalculator(data=_training_data, data_predictions=training_data_predicted_classes, cont_ind=continous_indices, cat_ind=categorical_indices)
+    calculator = ScoreCalculator(data=training_data, data_predictions=training_data_predicted_classes, cont_ind=continous_indices, cat_ind=categorical_indices)
 
-    result = list()
+    calculator.fit(
+        counterfactuals=cfs,
+        counterfactuals_predictions=cf_predicted_classes,
+        x=x,
+        x_predicted_class=x_predicted_class 
+    )
 
-    for cf, cf_class in zip(cfs, cf_predicted_classes):
+    feasib = calculator.feasibility()
 
-        cf = cf.flatten()
+    feasib_k = calculator.feasibility_k_neighbors(k_neighbors=k_neighbors_feasib)
 
-        feasib = calculator.feasibility(cf=cf, x=x)
-        print(f'Feasibility: {feasib:.4f}')
+    fc = calculator.features_changed()
 
-        feasib_k = calculator.feasibility_k_neighbors(cf=cf, x=x, k_neighbors=k_neighbors_feasib)
-        print(f'Feasibility w.r.t k-neigbors k={k_neighbors_feasib}: {feasib_k:.4f}')
+    prox = calculator.proximity()
 
-        fc = calculator.features_changed(cf=cf, x=x)
-        print(f'Features changed (normalized): {fc:.4f}')
+    disc = calculator.discriminative_power(k_neighbors=k_neighbors_discriminative)
 
-        prox = calculator.proximity(cf=cf, x=x)
-        print(f'Proximity: {prox:.4f}')
+    dcg = calculator.dcg(preference_ranking=preferences_ranking)
 
-        disc = calculator.discriminative_power(cf=cf, cf_predicted_class=cf_class, x=x, x_predicted_class=x_predicted_class, k_neighbors=k_neighbors_discriminative)
-        print(f'Discriminative power k={k_neighbors_discriminative}: {disc:.4f}')
-
-        dcg = calculator.dcg(cf=cf, x=x, preference_ranking=preferences_ranking)
-        print(f'DCG @ {len(preferences_ranking)}: {dcg:.4f}')
-
-        result.append({
-            'Proximity': prox,
-            'Feasibility': feasib,
-            f'Feasibility w.r.t k-neigbors k={k_neighbors_feasib}': feasib_k,
-            'Features Changed (normalized)': fc,
-            f'Discriminative Power k={k_neighbors_discriminative}': disc,
-            f'DCG @{len(preferences_ranking)}': dcg
-        })
+    result = {
+        'Proximity': prox,
+        'Feasibility': feasib,
+        f'K_Feasibility({k_neighbors_feasib})': feasib_k,
+        'FeaturesChanged': fc,
+        f'DiscriminativePower({k_neighbors_discriminative})': disc,
+        f'DCG@{len(preferences_ranking)}': dcg
+    }
 
     scores_df = pd.DataFrame(result)
     return scores_df
@@ -268,6 +286,13 @@ if __name__ == '__main__':
         np.array([2, 1, 'Female', 'No']),
         np.array([3, 8, 'Male', 'No']),
     ])
+    ncfs = np.array([
+        np.array([5, 2, 'Male', 'Maybe']),
+        np.array([5, 1, 'Female', 'No']),
+        np.array([3, 7, 'Female', 'Maybe']),
+    ])
+    ncfs_preds = np.array([1,1,0])
+
     classes = np.array([0,0,1,1,1,0,0])
     x = X[2]
 
@@ -276,32 +301,36 @@ if __name__ == '__main__':
     cont_ind = np.array([0, 1])
     cat_ind = np.array([2, 3])
 
-    calculator = ScoreCalculator(data=X, data_predictions=classes, cont_ind=cont_ind, cat_ind=cat_ind)
+    # calculator = ScoreCalculator(data=X, data_predictions=classes, cont_ind=cont_ind, cat_ind=cat_ind)
 
-    feasib = calculator.feasibility(c, x)
-    print(f'Feasibility: {feasib:.4f}')
+    # calculator.fit(ncfs, ncfs_preds, x, 1)
+    # heom = calculator.heom(ncfs, x)
 
-    feasib_k = calculator.feasibility_k_neighbors(cf=c, x=x, k_neighbors=3)
-    print(f'Feasibility w.r.t k-neigbors: {feasib_k:.4f}')
+    # feasib = calculator.feasibility()
+    # print(f'Feasibility: {feasib}')
 
-    fc = calculator.features_changed(cf=c, x=x)
-    print(f'Features changed (normalized): {fc:.4f}')
+    # feasib_k = calculator.feasibility_k_neighbors(k_neighbors=3)
+    # print(f'Feasibility w.r.t k-neigbors: {feasib_k}')
 
-    prox = calculator.proximity(cf=c, x=x)
-    print(f'Proximity: {prox:.4f}')
+    # fc = calculator.features_changed()
+    # print(f'Features changed (normalized): {fc}')
 
-    disc = calculator.discriminative_power(cf=c, cf_predicted_class=1, x=x, x_predicted_class=0, k_neighbors=3)
-    print(f'Discriminative power: {disc:.4f}')
+    # prox = calculator.proximity()
+    # print(f'Proximity: {prox}')
 
-    dcg = calculator.dcg(cf=c, x=x, preference_ranking=preference)
-    print(f'DCG@{len(preference)}: {dcg:.4f}')
+    # disc = calculator.discriminative_power(k_neighbors=3)
+    # print(f'Discriminative power: {disc}')
+
+    # dcg = calculator.dcg(preference_ranking=preference)
+    # print(f'DCG@{len(preference)}: {dcg}')
 
     cfs = np.array([
         [5,6,'Female', 'Maybe'],
-        [1, 1, 'Male', 'Yes']
+        [1, 1, 'Male', 'Yes'],
+        [5, 8, 'Male', 'Maybe'],
     ])
 
-    cfs_classes = np.array([1,1])
+    cfs_classes = np.array([1,1, 0])
 
 
     scores = get_scores(cfs=cfs, cf_predicted_classes=cfs_classes, 
