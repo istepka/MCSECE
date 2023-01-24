@@ -209,8 +209,8 @@ def get_scores(cfs: npt.NDArray, cf_predicted_classes: npt.NDArray,
     x: npt.NDArray, x_predicted_class: npt.NDArray,  
     training_data: pd.DataFrame | npt.NDArray, training_data_predicted_classes: npt.NDArray,  
     continous_indices: npt.NDArray, categorical_indices: npt.NDArray,  
-    preferences_ranking: npt.NDArray, k_neighbors_feasib: int = 50, 
-    k_neighbors_discriminative: int = 20
+    preferences_ranking: npt.NDArray, k_neighbors_feasib: int = 3, 
+    k_neighbors_discriminative: int = 9
     ) -> pd.DataFrame:
     '''
     Obtain metrics evaluation for the data.  

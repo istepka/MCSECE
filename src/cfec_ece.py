@@ -1,6 +1,6 @@
 from typing import Dict, List
 from modules.CFEC.cfec.explainers import Fimap, ECE, Cadex
-from modules.CFEC.cfec.constraints import OneHot, ValueMonotonicity, ValueRange, Freeze
+from modules.CFEC.cfec.constraints import OneHot, ValueMonotonicity, ValueRange, Freeze, ValueNominal
 from utils.transformations import min_max_normalization, inverse_min_max_normalization, transform_to_sparse, inverse_transform_to_sparse
 import pandas as pd
 import tensorflow as tf
@@ -59,7 +59,8 @@ class CfecEceModel:
     model: tf.keras.Model | RandomForestClassifier, columns_to_change: List[str], 
     cadex_max_feature_changes: int = 15, cadex_max_epochs: int = 20
     ) -> None:
-        self.train_data = train_data_normalized
+        self.ohe_features_order_str = constraints_dictionary['features_order_after_split']
+        self.train_data = train_data_normalized[self.ohe_features_order_str]
         self.constraints = None
         self.create_constraints(constraints_dictionary)
 
@@ -136,13 +137,15 @@ class CfecEceModel:
             
             self.fimaps.append(fimap)
 
-        self.ece = ECE(len(self.cadexes + self.fimaps), columns=list(self.train_data.columns), bces=self.fimaps + self.cadexes, dist=2, h=5, lambda_=0.001, n_jobs=1)
+        self.ece = ECE(len(self.cadexes + self.fimaps), columns=self.ohe_features_order_str, bces=self.fimaps + self.cadexes, dist=2, h=5, lambda_=0.001, n_jobs=1)
 
 
     def generate_counterfactuals(self, query_instance: pd.Series) -> pd.DataFrame:
         cfs = None
         list_cfs_explainers = None
         
+        query_instance = query_instance[self.ohe_features_order_str]
+
         cfs, list_cfs_explainers = self.ece.generate(query_instance)
        
         # Change names to more readable form
@@ -183,16 +186,20 @@ class CfecEceModel:
                     feature_first_occurrence_after_split[feature], 
                     feature_first_occurrence_after_split[feature] + features_counts[feature] - 1
                     ))
+
+            # constraints.append(ValueNominal(
+            #     categorical_features_map_to_thier_splits[feature]
+            # ))
         
         # ValueRange constraints
-        for feature, (lower, upper) in feature_ranges.items():
-            constraints.append(ValueRange([feature], lower, upper))
+        # for feature, (lower, upper) in feature_ranges.items():
+        #     constraints.append(ValueRange([feature], lower, upper))
 
         # # ValueMonotonicity constraints
         # for feature, monotonicity in features_monotonicity.items():
         #     constraints.append(ValueMonotonicity([feature], monotonicity))
 
-        print('Constraints: \n', constraints)
+        #print('Constraints: \n', constraints)
 
         self.constraints = constraints
         return constraints
@@ -211,7 +218,7 @@ if __name__ == '__main__':
 
     train_dataset = pd.read_csv("data/adult.csv")
     dataset_name = 'adult'
-    instance_to_explain_index = 55
+    instance_to_explain_index = 8908
 
     with open('data/adult_constraints.json', 'r') as f:
         constr = json.load(f)

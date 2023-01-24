@@ -51,10 +51,11 @@ class Ensemble:
         self.train_dataset_ohe_normalized = self.transform_to_normalized_ohe(self.train_dataset_pd)
 
         # Create mask for actionable features in one-hot-encoded form. 1 indicates actionable features
-        self.actionable_mask_indices_ohe = [
+        self.actionable_mask_ohe = np.array([
             1 if any([act in x for act in self.actionabe_columns_names]) else 0 
             for x in self.features_order_after_split
-            ]
+            ], dtype='bool')
+        self.actionable_mask_ohe_indices = np.where(self.actionable_mask_ohe)[0].tolist()
 
         # Models definitions and init
         # dice
@@ -99,6 +100,7 @@ class Ensemble:
         print(f'CFEC generated: {cfec_cfs.shape[0]}')
 
         counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs], ignore_index=True)
+        counterfactuals = self.clip_to_ranges(counterfactuals)
         return counterfactuals
 
 
@@ -135,7 +137,7 @@ class Ensemble:
             train_data_normalized=self.train_dataset_ohe_normalized,
             constraints_dictionary=self.constraints,
             model = self.model_to_explain,
-            columns_to_change=self.actionable_mask_indices_ohe,
+            columns_to_change=self.actionable_mask_ohe_indices,
             cadex_max_feature_changes=15,
             cadex_max_epochs=20
         )
@@ -180,7 +182,16 @@ class Ensemble:
 
         return query_instance
             
+    def clip_to_ranges(self, counterfactuals: pd.DataFrame) -> pd.DataFrame:
+        '''Clip values outside of the defined ranges'''
+        for feature, (lower, upper) in self.feature_ranges.items():
+            #print(ranges)
+           # lower, upper = ranges[0], ranges[1]
+           counterfactuals.loc[counterfactuals[feature] < lower, feature] = lower
+           counterfactuals.loc[counterfactuals[feature] > upper, feature] = upper
+        return counterfactuals
 
+     
 
 if __name__ == '__main__':
     explained_model_backend = 'tensorflow' # 'sklearn' or 'tensorflow'
@@ -196,7 +207,7 @@ if __name__ == '__main__':
 
     train_dataset = pd.read_csv("data/adult.csv")
     dataset_name = 'adult'
-    instance_to_explain_index = 890
+    instance_to_explain_index = 8908
 
     with open('data/adult_constraints.json', 'r') as f:
         constr = json.load(f)
