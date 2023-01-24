@@ -7,7 +7,9 @@ import tensorflow as tf
 import pickle
 import numpy as np
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
 from tqdm import tqdm
+import os
 
 # Enable eager mode
 tf.compat.v1.enable_eager_execution()
@@ -54,65 +56,98 @@ def train_supplementary_NN(train_data_normalized: np.ndarray, model_proba_predic
 class CfecEceModel:
 
     def __init__(self, train_data_normalized, constraints_dictionary, 
-    model_path=None, model_backend=None, 
-    fimap_load_s_g_full_id=None, fimap_save_s_q_prefix: str = None,
-    columns_to_change: List[str] = None
+    model: tf.keras.Model | RandomForestClassifier, columns_to_change: List[str], 
+    cadex_max_feature_changes: int = 15, cadex_max_epochs: int = 20
     ) -> None:
         self.train_data = train_data_normalized
         self.constraints = None
         self.create_constraints(constraints_dictionary)
 
-        if model_path and model_backend == 'tensorflow':
-            model = tf.keras.models.load_model(model_path)
-            model_predictions_proba = model.predict(self.train_data)
-            model_predictions = np.argmax(model_predictions_proba, axis=1)
+        if isinstance(model, tf.keras.Model):
+            model_backend = 'tensorflow'
         else:
-            with open(model_path, 'rb') as f:
-                model = pickle.load(f) 
+            model_backend = 'sklearn'
+
+        # Predict over entire dataset
+        if model_backend == 'tensorflow':
+            model_predictions_proba = model.predict(self.train_data)
+            self.model_predictions = np.argmax(model_predictions_proba, axis=1)
+        else:
             model_predictions_proba = np.array(model.predict_proba(self.train_data)[0])
-            model_predictions = np.argmax(model_predictions_proba, axis=1)
+            self.model_predictions = np.argmax(model_predictions_proba, axis=1)
 
             # Train supplementary NN
             supp_model = train_supplementary_NN(self.train_data, model_predictions_proba)
 
-        cadexes = []
-        if model_path:      
-            for n_changed in list(range(1, 15)):
-                if model_backend == 'tensorflow':
-                    cadex = Cadex(model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=20, columns_to_change=columns_to_change)
-                    cadexes.append(cadex)
-                if model_backend == 'sklearn':
-                    cadex = Cadex(supp_model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=20, columns_to_change=columns_to_change)
-                    cadexes.append(cadex)
+        # Add Cadex explainers to the ECE list
+        self.cadexes = []     
+        for n_changed in list(range(1, cadex_max_feature_changes)):
+            if model_backend == 'tensorflow':
+                cadex = Cadex(model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=cadex_max_epochs, columns_to_change=columns_to_change)
+                self.cadexes.append(cadex)
+            if model_backend == 'sklearn':
+                cadex = Cadex(supp_model, n_changed, constraints=self.constraints, optimizer=tf.keras.optimizers.legacy.Adam(0.05), max_epochs=cadex_max_epochs, columns_to_change=columns_to_change)
+                self.cadexes.append(cadex)
         
         # Prepare fimap models
-        fimaps = []
-        fimap_hyperparameters = [
+        self.fimaps = []
+        self.fimap_hyperparameters = [
             (0.1, 0.001, 0.01),
             (0.1, 0.05, 0.5),
             (0.2, 0.01, 0.1),
             (0.2, 0.08, 0.8),
             (0.5, 0.001, 0.01)
         ]
-        for i in range(len(fimap_hyperparameters)):
-            tau, l1, l2 = fimap_hyperparameters[i]
-            fimap = Fimap(tau, l1, l2, constraints=self.constraints, use_mapper=True, fimap_load_s_g_full_id=fimap_load_s_g_full_id, fimap_save_s_q_prefix=fimap_save_s_q_prefix)
+        
 
-            # Fit only if we do not want to load already trained models
-            #if not fimap_load_s_g_full_id:
-            fimap.fit(self.train_data, model_predictions)
+    def fit(self, fimap_load_string: str, models_subdirectory: str = 'src\\models\\cfec') -> None:
+        '''
+        Fit the CFEC Fimap model and build final ECE.
+
+        Format for `fimap_load_string` is '{dataset_shortname}_{model_backend}|{yyyy-mm-dd}' e.g. 'adult_sklearn|2023-01-17'
+        '''
+        # Check if directory exists
+
+        for _tau, _l1, _l2 in self.fimap_hyperparameters:
+            tmp = fimap_load_string.split('|')
+            cwd = os.getcwd()
+
+            filepath_s = os.path.join(cwd, f'{models_subdirectory}\\s_{tmp[0]}_{_tau}_{_l1}_{_l2}_{tmp[1]}')
+            filepath_g = os.path.join(cwd, f'{models_subdirectory}\\g_{tmp[0]}_{_tau}_{_l1}_{_l2}_{tmp[1]}.h5')
+
+
+            if os.path.exists(filepath_g) and os.path.exists(filepath_s):
+                safe_load = True
+            else:
+                safe_load = False
+                print('CFEC cannot find pretrained modules for fimap - training will start shortly. This might take some time.')
+
+
+        # Load and fit fimaps
+        for i in range(len(self.fimap_hyperparameters)):
+            tau, l1, l2 = self.fimap_hyperparameters[i]
+
+            # If Fimap doesn't load pretrained models then it takes a long time to fit its s and g
+            fimap = Fimap(fimap_safe_load=safe_load, fimap_s_filepath=filepath_s, fimap_g_filepath=filepath_g,
+                    tau=tau, l1=l1, l2=l2, constraints=self.constraints, use_mapper=True
+                    )
+ 
+            fimap.fit(self.train_data, self.model_predictions)
             
-            fimaps.append(fimap)
+            self.fimaps.append(fimap)
 
-        self.ece = ECE(len(cadexes + fimaps), columns=list(self.train_data.columns), bces=fimaps + cadexes, dist=2, h=5, lambda_=0.001, n_jobs=1)
+        self.ece = ECE(len(self.cadexes + self.fimaps), columns=list(self.train_data.columns), bces=self.fimaps + self.cadexes, dist=2, h=5, lambda_=0.001, n_jobs=1)
+
 
     def generate_counterfactuals(self, query_instance: pd.Series) -> pd.DataFrame:
         cfs = None
         list_cfs_explainers = None
-        # try:
+        
         cfs, list_cfs_explainers = self.ece.generate(query_instance)
-        # except exception:
-        #     print('No counterfactuals found (AttributeError). Return None') 
+       
+        # Change names to more readable form
+        list_cfs_explainers = list(map(lambda x: 'cadex' if 'cadex' in str.lower(x) else 'fimap', list_cfs_explainers))
+
         return cfs, list_cfs_explainers
 
     
@@ -205,16 +240,18 @@ if __name__ == '__main__':
 
     train_dataset_sparse_normalized_subsample = train_dataset_sparse_normalized.sample(frac=1.0)
 
+    expl_model = tf.keras.models.load_model('models/adult_NN/')
+
+    actionable_mask_indices_sparse = [1 if any([act in x for act in constr['actionable_features']]) else 0 for x in constr['features_order_after_split']]
 
     cfec_model = CfecEceModel(
         train_data_normalized=train_dataset_sparse_normalized_subsample,
         constraints_dictionary=constr,
-        model_path='models/adult_NN/',
-        model_backend='tensorflow',
-        # model_path='models/adult_RF.pkl',
-        # model_backend='sklearn'
-        fimap_load_s_g_full_id=f'adult_tensorflow|2023-01-17',
+        model=expl_model,
+        columns_to_change=actionable_mask_indices_sparse
     )
+
+    cfec_model.fit('adult_tensorflow|2023-01-17')
 
     cfec_counterfactuals = cfec_model.generate_counterfactuals(query_instance=query_instance_sparse_normalized.iloc[0])
     # Inverse min-max normalization

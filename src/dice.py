@@ -4,8 +4,10 @@ import numpy as np
 import json 
 import pickle
 import sklearn
+from sklearn.ensemble import RandomForestClassifier
 from dice_ml.model_interfaces.base_model import BaseModel
 from dice_ml.model import ModelTypes
+import tensorflow as tf
 
 
 class SklearnModelDice(BaseModel):
@@ -44,16 +46,15 @@ class DiceModel:
         continuous_features: list,
         categorical_features: list,
         target: str,
-        model_path: str,
         backend: str,
-        func: str,
+        model: tf.keras.Model | RandomForestClassifier,
+        func: str = 'ohe-min-max',
         ) -> None:
 
         self.train_dataset = train_dataset
         self.continuous_features = continuous_features
         self.categorical_features = categorical_features
         self.target = target
-        self.model_path = model_path
         self.backend = backend
         self.func = func
 
@@ -64,19 +65,19 @@ class DiceModel:
             outcome_name=self.target
             )
 
-        if backend == 'sklearn':
-            self.Model = SklearnModelDice(
-                model_path=self.model_path, 
-                backend=self.backend, 
-                func=self.func          
-            )
-
-        else:
+        if isinstance(model, tf.keras.Model):
             self.Model = dice_ml.Model(
-                model_path=self.model_path, 
-                backend=self.backend, 
+                #model_path=self.model_path, 
+                backend='TF2', 
+                model=model,
                 func=self.func
                 )
+        else:
+            self.Model = SklearnModelDice(
+                backend='sklearn', 
+                model=model,
+                func=self.func          
+            )
 
         self.Dice = dice_ml.Dice(
             self.Data,
