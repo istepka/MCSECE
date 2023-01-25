@@ -72,6 +72,12 @@ class DiceModel:
                 model=model,
                 func=self.func
                 )
+
+            self.Dice = dice_ml.Dice(
+                self.Data,
+                self.Model,
+                method='random'
+                )
         else:
             self.Model = SklearnModelDice(
                 backend='sklearn', 
@@ -79,11 +85,11 @@ class DiceModel:
                 func=self.func          
             )
 
-        self.Dice = dice_ml.Dice(
-            self.Data,
-            self.Model,
-            method='random'
-            )
+            self.Dice = dice_ml.Dice(
+                self.Data,
+                self.Model,
+                method='random'
+                )
 
     def generate_counterfactuals(self, query_instance: pd.DataFrame, 
         total_CFs: int,
@@ -93,7 +99,7 @@ class DiceModel:
         ) -> pd.DataFrame:
 
         explanation = self.Dice.generate_counterfactuals(
-            query_instances=query_instance,
+            query_instance,
             total_CFs=total_CFs,
             desired_class=desired_class,
             features_to_vary=features_to_vary,

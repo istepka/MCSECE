@@ -97,7 +97,8 @@ class CfecEceModel:
             (0.1, 0.05, 0.5),
             (0.2, 0.01, 0.1),
             (0.2, 0.08, 0.8),
-            (0.5, 0.001, 0.01)
+            (0.5, 0.001, 0.01),
+            (0.5, 0.01, 0.5)
         ]
         
 
@@ -107,14 +108,17 @@ class CfecEceModel:
 
         Format for `fimap_load_string` is '{dataset_shortname}_{model_backend}|{yyyy-mm-dd}' e.g. 'adult_sklearn|2023-01-17'
         '''
-        # Check if directory exists
+       
 
-        for _tau, _l1, _l2 in self.fimap_hyperparameters:
+        # Load and fit fimaps
+        for i in range(len(self.fimap_hyperparameters)):
+            tau, l1, l2 = self.fimap_hyperparameters[i]
             tmp = fimap_load_string.split('|')
             cwd = os.getcwd()
 
-            filepath_s = os.path.join(cwd, f'{models_subdirectory}\\s_{tmp[0]}_{_tau}_{_l1}_{_l2}_{tmp[1]}')
-            filepath_g = os.path.join(cwd, f'{models_subdirectory}\\g_{tmp[0]}_{_tau}_{_l1}_{_l2}_{tmp[1]}.h5')
+            # Check if directory exists
+            filepath_s = os.path.join(cwd, f'{models_subdirectory}\\s_{tmp[0]}_{tau}_{l1}_{l2}_{tmp[1]}')
+            filepath_g = os.path.join(cwd, f'{models_subdirectory}\\g_{tmp[0]}_{tau}_{l1}_{l2}_{tmp[1]}.h5')
 
 
             if os.path.exists(filepath_g) and os.path.exists(filepath_s):
@@ -122,11 +126,6 @@ class CfecEceModel:
             else:
                 safe_load = False
                 print('CFEC cannot find pretrained modules for fimap - training will start shortly. This might take some time.')
-
-
-        # Load and fit fimaps
-        for i in range(len(self.fimap_hyperparameters)):
-            tau, l1, l2 = self.fimap_hyperparameters[i]
 
             # If Fimap doesn't load pretrained models then it takes a long time to fit its s and g
             fimap = Fimap(fimap_safe_load=safe_load, fimap_s_filepath=filepath_s, fimap_g_filepath=filepath_g,
