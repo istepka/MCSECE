@@ -12,13 +12,14 @@ from cfec_ece import CfecEceModel
 class Ensemble:
 
     def __init__(self, train_dataset: pd.DataFrame, constraints_config_dictionary: Dict,
-        model_to_explain: tf.keras.Model | RandomForestClassifier,
+        model_to_explain: tf.keras.Model | RandomForestClassifier, model_path: str,
         list_of_explainers: List[str] = ['dice', 'fimap', 'cadex', 'wachter', 'cem'],
     ) -> None:
         
         self.train_dataset_pd = train_dataset
         self.constraints = constraints_config_dictionary
         self.model_to_explain = model_to_explain
+        self.model_path = model_path
         self.list_of_explainers = list_of_explainers
 
         if isinstance(model_to_explain, tf.keras.Model):
@@ -100,9 +101,11 @@ class Ensemble:
         query_instance_norm_ohe = self.transform_to_normalized_ohe(query_instance)
 
         query_instance_class_int = int(np.argmax(self.model_to_explain.predict(query_instance_norm_ohe.to_numpy().astype("float64"))))
+        desired_class = 1 - query_instance_class_int
         print(f'X class: {query_instance_class_int}')
+        print(f'Desired cf class: {desired_class}')
 
-        # DICE 
+        # generate DICE 
         dice_cfs = self.__dice_generate_counterfactuals(query_instance=query_instance)
         if dice_cfs is not None:
             dice_cfs['explainer'] = 'dice'
@@ -111,11 +114,10 @@ class Ensemble:
         print(f'Dice generated: {dice_cfs.shape[0]}')
 
 
-        # CFEC
+        # generate CFEC
         cfec_cfs_norm_ohe, cfec_explainers = self.cfec_model.generate_counterfactuals(
             query_instance=query_instance_norm_ohe.iloc[0]
         )
-        tmp = cfec_cfs_norm_ohe.to_numpy()
         if cfec_cfs_norm_ohe is not None and len(cfec_cfs_norm_ohe) > 0:
             cfec_cfs = self.transform_from_norm_ohe(cfec_cfs_norm_ohe)
             cfec_cfs['explainer'] = cfec_explainers
@@ -123,18 +125,34 @@ class Ensemble:
             cfec_cfs = counterfactuals.copy()
         print(f'CFEC generated: {cfec_cfs.shape[0]}')
 
-        counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs], ignore_index=True)
-        #counterfactuals = self.__clip_to_ranges(counterfactuals)
+        # generate Wachter
+        wachter_cfs = self.__wachter_generate_counterfactuals(query_instace=query_instance, desired_class=desired_class)
+        if wachter_cfs is None or len(wachter_cfs) == 0:
+            wachter_cfs = counterfactuals.copy()
+        print(f'Wachter generated: {wachter_cfs.shape[0]}')
+
+        # generate CEM
+        cem_cfs = self.__cem_generate_counterfactuals(query_instance)
+        if cem_cfs is None or len(cem_cfs) == 0:
+            cem_cfs = counterfactuals.copy()
+        print(f'CEM generated: {cem_cfs.shape[0]}')
+        
+
+        # Combine all generated counterfactuals
+        counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs, wachter_cfs, cem_cfs], ignore_index=True)
+
         counterfactuals[self.feature_name_to_predict] = self.__get_prediction_class_to_counterfactuals(counterfactuals)
 
+        # Filter and save counterfactuals
         self.all_counterfactuals = counterfactuals.copy()
-        self.valid_counterfactuals = self.__filter_only_valid(counterfactuals, query_instance)
+        self.counterfactuals_clipped = self.__clip_to_ranges(self.all_counterfactuals)
+        self.valid_counterfactuals = self.__filter_only_valid(self.counterfactuals_clipped, query_instance)
         self.valid_actionable_counterfactuals = self.__filter_non_actionable(self.valid_counterfactuals, query_instance)
 
         return counterfactuals
 
 
-    
+    # EXPLAINERS
     def __init_dice(self) -> None:
         # Get Dice-format backend name
         if self.model_backend_name == 'sklearn':
@@ -185,6 +203,95 @@ class Ensemble:
             fimap_load_string=f'{self.dataset_shortname}_{self.model_backend_name}|{fimap_load_models_date}'
             )
 
+    def __wachter_generate_counterfactuals(self, query_instace: pd.DataFrame, desired_class: int, total_cfs: int = 10) -> pd.DataFrame:
+        
+        from alibi_impl import AlibiWachter
+
+        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instace)
+
+        # Freeze feature ranges on non-actionable features
+        wachter_feature_ranges = (
+            self.train_dataset_ohe_normalized.to_numpy().min(axis=0),
+            self.train_dataset_ohe_normalized.to_numpy().max(axis=0),
+        )
+        non_actionable_indices = ~np.array(self.actionable_mask_ohe, dtype='bool')
+        wachter_feature_ranges[0][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
+        wachter_feature_ranges[1][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
+
+        query_shape = (1, self.train_dataset_ohe_normalized.shape[1])
+
+        # Initialize explainer
+        if self.model_backend_name == 'sklearn':
+            self.wachter_model = AlibiWachter(self.model_to_explain, query_shape, 
+                                        feature_ranges=wachter_feature_ranges, max_iter=100, max_lam_steps=10, 
+                                        lam_init=0.001, learning_rate_init=0.1, early_stop=50, tolerance=0.01, 
+                                        target_proba=0.6, target_class=desired_class
+                                        )
+        else:
+            tf.compat.v1.disable_eager_execution()
+            # load model specifically for Wachter because it does not support model loaded in eager mode ;(
+            if isinstance(self.model_to_explain, tf.keras.Model):
+                self.model_to_explain = tf.keras.models.load_model(self.model_path)
+
+            self.wachter_model = AlibiWachter(self.model_to_explain, query_shape, 
+                                        target_proba=0.6, feature_ranges=wachter_feature_ranges,
+                                        tolerance=0.09, target_class=desired_class
+                                        )
+
+        # Generate
+        explanation = self.wachter_model.generate_counterfactuals(query_instance_ohe_norm)
+
+        # Get counterfactuals from the optimization process
+        wachter_counterfactuals = []
+        for _, lst in explanation['data']['all'].items():
+            if lst:
+                for cf in lst:
+                    wachter_counterfactuals.append(cf['X'])
+
+        # Reshape to (n, features)
+        wachter_counterfactuals = np.array(wachter_counterfactuals).reshape(-1, query_instance_ohe_norm.shape[1])
+        
+        # Get random sample from all cfs to get desired number 
+        _indices_to_take = np.random.permutation(wachter_counterfactuals.shape[0])[0:total_cfs-1]
+        wachter_counterfactuals = wachter_counterfactuals[_indices_to_take, :]
+
+        # Concat sample with the one counterfactual that wachter chose as best found
+        wachter_counterfactuals = np.concatenate([wachter_counterfactuals, explanation.cf['X']], axis=0)
+
+        # Transform to original dataframe format
+        wachter_counterfactuals_df_ohe_norm = pd.DataFrame(wachter_counterfactuals, columns=constr['features_order_after_split'])
+        wachter_counterfactuals_df = self.transform_from_norm_ohe(wachter_counterfactuals_df_ohe_norm)
+        wachter_counterfactuals_df['explainer'] = 'wachter'
+
+        return wachter_counterfactuals_df
+    
+    def __cem_generate_counterfactuals(self, query_instace: pd.DataFrame) -> None:
+        from alibi_impl import AlibiCEM
+
+        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instace)
+
+        cem_feature_ranges = (
+            self.train_dataset_ohe_normalized.to_numpy().min(axis=0),
+            self.train_dataset_ohe_normalized.to_numpy().max(axis=0),
+        )
+        non_actionable_indices = ~np.array(self.actionable_mask_ohe, dtype='bool')
+        cem_feature_ranges[0][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
+        cem_feature_ranges[1][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
+
+        self.cem_model = AlibiCEM(model=self.model_to_explain, train_data_ohe_norm=self.train_dataset_ohe_normalized.to_numpy(), 
+                        query_instance_shape=query_instance_ohe_norm.shape, feature_ranges=cem_feature_ranges,
+                        )
+
+        cem_cfs = self.cem_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy(), verbose=True)
+        cem_cfs_df_ohe_norm = pd.DataFrame(cem_cfs.PN, columns=self.features_order_after_split)
+
+        cem_cfs_df = self.transform_from_norm_ohe(cem_cfs_df_ohe_norm)
+        cem_cfs_df['explainer'] = 'cem'
+
+        return cem_cfs_df
+
+
+    # UTILITY FUNCTIONS 
     def transform_to_normalized_ohe(self, query_instance: pd.DataFrame) -> pd.DataFrame:
         '''Transform original dataframe into one-hot-encoded and normalized form.'''
         query_instance_ohe = transform_to_sparse(
@@ -218,7 +325,7 @@ class Ensemble:
         )
 
         return query_instance
-            
+
     def __clip_to_ranges(self, counterfactuals: pd.DataFrame) -> pd.DataFrame:
         '''Clip values outside of the defined ranges'''
         for feature, (lower, upper) in self.feature_ranges.items():
@@ -268,12 +375,13 @@ class Ensemble:
 
         return counterfactuals[mask]
 
+    # GETTERS
     def get_all_counterfactuals(self) -> pd.DataFrame:
         '''Get all counterfactuals that were found. No guarantees of validity and actionability.'''
         return self.all_counterfactuals
 
     def get_valid_counterfactuals(self) -> pd.DataFrame:
-        '''Get all counterfactuals that were found and are guaranted to alter the prediction class.'''
+        '''Get all counterfactuals that were found and are guaranted to alter the prediction class after clipping to allowed ranges (if necessary).'''
         return self.valid_counterfactuals
 
     def get_valid_and_actionable_counterfactuals(self) -> pd.DataFrame:
@@ -299,18 +407,23 @@ if __name__ == '__main__':
 
     train_dataset = pd.read_csv("data/adult.csv")
     dataset_name = 'adult'
-    instance_to_explain_index = 8908
+    instance_to_explain_index = 11
 
     with open('data/adult_constraints.json', 'r') as f:
         constr = json.load(f)
 
+
+    
+    
     if explained_model_backend == 'sklearn':
         # SKLEARN
-        with open('models/adult_RF.pkl', 'rb') as f:
+        mod_path = 'models/adult_RF.pkl'
+        with open(mod_path, 'rb') as f:
             explained_model = pickle.load(f)
     else: 
         # TENSORFLOW
-        explained_model = tf.keras.models.load_model('models/adult_NN/')
+        mod_path = 'models/adult_NN/'
+        explained_model = tf.keras.models.load_model(mod_path)
 
 
     train_dataset = train_dataset[constr['features_order_nonsplit']]
@@ -318,10 +431,9 @@ if __name__ == '__main__':
 
 
     enseble = Ensemble(
-        train_dataset=train_dataset,
-        constraints_config_dictionary=constr,
-        model_to_explain=explained_model
-    )
+        train_dataset=train_dataset, constraints_config_dictionary=constr,
+        model_to_explain=explained_model, model_path=mod_path,
+        )
 
     cfs = enseble.generate_counterfactuals(query_instance)
 
