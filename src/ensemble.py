@@ -8,12 +8,13 @@ from sklearn.ensemble import RandomForestClassifier
 # Own
 from dice import DiceModel 
 from cfec_ece import CfecEceModel
+from utils.transformations import min_max_normalization, inverse_min_max_normalization, transform_to_sparse, inverse_transform_to_sparse
 
 class Ensemble:
 
     def __init__(self, train_dataset: pd.DataFrame, constraints_config_dictionary: Dict,
         model_to_explain: tf.keras.Model | RandomForestClassifier, model_path: str,
-        list_of_explainers: List[str] = ['dice', 'fimap', 'cadex', 'wachter', 'cem'],
+        list_of_explainers: List[str] = ['dice', 'fimap', 'cadex', 'wachter', 'cem', 'cfproto'],
     ) -> None:
         
         self.train_dataset_pd = train_dataset
@@ -136,10 +137,16 @@ class Ensemble:
         if cem_cfs is None or len(cem_cfs) == 0:
             cem_cfs = counterfactuals.copy()
         print(f'CEM generated: {cem_cfs.shape[0]}')
+
+        # generate CfProto
+        cfproto_cfs = self.__cfproto_generate_counterfactuals(query_instance)
+        if cfproto_cfs is None or len(cfproto_cfs) == 0:
+            cfproto_cfs = counterfactuals.copy()
+        print(f'CFPROTO generated: {cfproto_cfs.shape[0]}')
         
 
         # Combine all generated counterfactuals
-        counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs, wachter_cfs, cem_cfs], ignore_index=True)
+        counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs, wachter_cfs, cem_cfs, cfproto_cfs], ignore_index=True)
 
         counterfactuals[self.feature_name_to_predict] = self.__get_prediction_class_to_counterfactuals(counterfactuals)
 
@@ -234,8 +241,8 @@ class Ensemble:
                 self.model_to_explain = tf.keras.models.load_model(self.model_path)
 
             self.wachter_model = AlibiWachter(self.model_to_explain, query_shape, 
-                                        target_proba=0.6, feature_ranges=wachter_feature_ranges,
-                                        tolerance=0.09, target_class=desired_class
+                                        target_proba=0.52, feature_ranges=wachter_feature_ranges,
+                                        tolerance=0.01, target_class=desired_class
                                         )
 
         # Generate
@@ -259,7 +266,7 @@ class Ensemble:
         wachter_counterfactuals = np.concatenate([wachter_counterfactuals, explanation.cf['X']], axis=0)
 
         # Transform to original dataframe format
-        wachter_counterfactuals_df_ohe_norm = pd.DataFrame(wachter_counterfactuals, columns=constr['features_order_after_split'])
+        wachter_counterfactuals_df_ohe_norm = pd.DataFrame(wachter_counterfactuals, columns=self.features_order_after_split)
         wachter_counterfactuals_df = self.transform_from_norm_ohe(wachter_counterfactuals_df_ohe_norm)
         wachter_counterfactuals_df['explainer'] = 'wachter'
 
@@ -282,13 +289,72 @@ class Ensemble:
                         query_instance_shape=query_instance_ohe_norm.shape, feature_ranges=cem_feature_ranges,
                         )
 
-        cem_cfs = self.cem_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy(), verbose=True)
+        cem_cfs = self.cem_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy(), verbose=False)
         cem_cfs_df_ohe_norm = pd.DataFrame(cem_cfs.PN, columns=self.features_order_after_split)
 
         cem_cfs_df = self.transform_from_norm_ohe(cem_cfs_df_ohe_norm)
         cem_cfs_df['explainer'] = 'cem'
 
         return cem_cfs_df
+
+    def __cfproto_generate_counterfactuals(self, query_instance: pd.DataFrame, total_CFs: int = 10) -> None:
+        from alibi_impl import AlibiProto
+        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instance)
+
+        # cfprot_feature_ranges = (
+        #     self.train_dataset_ohe_normalized.to_numpy().min(axis=0),
+        #     self.train_dataset_ohe_normalized.to_numpy().max(axis=0),
+        # )
+        # non_actionable_indices = ~np.array(self.actionable_mask_ohe, dtype='bool')
+        # cfprot_feature_ranges[0][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
+        # cfprot_feature_ranges[1][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
+        # cfprot_feature_ranges = (cfprot_feature_ranges[0].reshape(1,-1), cfprot_feature_ranges[1].reshape(1,-1))
+
+        frozen_indices = [query_instance.columns.tolist().index(feat) for feat in self.non_actionable_columns_names]
+
+        ranges = (
+            np.zeros(query_instance.shape),
+            np.ones(query_instance.shape)
+        )
+        # Freeze possible feature changes on frozen features
+        #ranges[1][:, frozen_indices] = 0
+
+        self.cfproto_model = AlibiProto(
+                                model=self.model_to_explain, 
+                                query_instance_shape=query_instance_ohe_norm.shape,
+                                features_first_occurrence_indices=self.feature_first_occurrence_index_after_split, 
+                                feature_value_counts=self.feature_value_counts, 
+                                categorical_features_names=self.categorical_columns_names,
+                                feature_ranges=ranges
+                            )
+
+        self.cfproto_model.fit(self.train_dataset_ohe_normalized.to_numpy())
+
+        explanation = self.cfproto_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy())
+
+         # Get counterfactuals from the optimization process
+        cfproto_counterfactuals = []
+        for _, lst in explanation['data']['all'].items():
+            if lst:
+                for cf in lst:
+                    cfproto_counterfactuals.append(cf)
+
+        # Reshape to (n, features)
+        cfproto_counterfactuals = np.array(cfproto_counterfactuals).reshape(-1, query_instance_ohe_norm.shape[1])
+        
+        # Get random sample from all cfs to get desired number 
+        _indices_to_take = np.random.permutation(cfproto_counterfactuals.shape[0])[0:total_CFs-1]
+        cfproto_counterfactuals = cfproto_counterfactuals[_indices_to_take, :]
+
+        # Concat sample with the one counterfactual that wachter chose as best found
+        cfproto_counterfactuals = np.concatenate([cfproto_counterfactuals, explanation.cf['X']], axis=0)
+
+        cfproto_cfs_ohe_norm = pd.DataFrame(cfproto_counterfactuals, columns=self.features_order_after_split)
+
+        cfproto_cfs_df = self.transform_from_norm_ohe(cfproto_cfs_ohe_norm)
+        cfproto_cfs_df['explainer'] = 'cfproto'
+
+        return cfproto_cfs_df
 
 
     # UTILITY FUNCTIONS 
@@ -399,7 +465,6 @@ if __name__ == '__main__':
 
     from sklearn.model_selection import train_test_split
     import json
-    from utils.transformations import min_max_normalization, inverse_min_max_normalization, transform_to_sparse, inverse_transform_to_sparse
     import warnings
     import pickle
 
@@ -407,7 +472,7 @@ if __name__ == '__main__':
 
     train_dataset = pd.read_csv("data/adult.csv")
     dataset_name = 'adult'
-    instance_to_explain_index = 11
+    instance_to_explain_index = 5
 
     with open('data/adult_constraints.json', 'r') as f:
         constr = json.load(f)

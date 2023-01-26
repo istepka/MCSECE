@@ -1,8 +1,9 @@
+from typing import Dict, List
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import pickle
-from alibi.explainers import Counterfactual, CEM
+from alibi.explainers import Counterfactual, CEM, CounterfactualProto
 import tensorflow as tf
 from utils.transformations import transform_to_sparse, inverse_min_max_normalization, min_max_normalization
 from sklearn.ensemble import RandomForestClassifier
@@ -46,6 +47,7 @@ class AlibiWachter:
             explanation = self.cf.explain(query_instance_norm)
         return explanation
 
+
 class AlibiCEM:
     def __init__(self, model: tf.keras.Model | RandomForestClassifier, train_data_ohe_norm: npt.NDArray,
     query_instance_shape: npt.NDArray, feature_ranges: npt.NDArray, 
@@ -79,10 +81,10 @@ class AlibiCEM:
             beta = .1 
             c_init = 10  
             c_steps = 10  
-            max_iterations = 500
+            max_iterations = 200
             lr_init = 1e-2  
             # initialize CEM explainer and explain instance
-            self.cem = CEM(model, mode, (1,85), kappa=kappa, beta=beta, feature_range=feature_ranges,
+            self.cem = CEM(model, mode, shape, kappa=kappa, beta=beta, feature_range=feature_ranges,
                     max_iterations=max_iterations, c_init=c_init, c_steps=c_steps,
                     learning_rate_init=lr_init, clip=clip, no_info_val=0.0
                     )
@@ -96,39 +98,41 @@ class AlibiCEM:
 
 
 class AlibiProto:
-    def __init__(self, model_path, model_type, query_instance_shape) -> None:
+    def __init__(self, model: tf.keras.Model | RandomForestClassifier, query_instance_shape: npt.NDArray,
+        features_first_occurrence_indices: Dict[str, int], feature_value_counts: Dict[str, int], 
+        categorical_features_names: List[str], feature_ranges: npt.NDArray
+    ) -> None:
         '''
-        model_path: full path
-        model_type: sklearn or tensorflow
         query_instance_shape: shape of single instance e.g. (1, 85)
         '''
 
-        if model_type == 'sklearn':
-            with open(model_path ,'rb') as f:
-                model = pickle.load(f)
+        # Create dictionary of {index: columns} for categorical ohe variables  
+        cat_vars_ohe = {}
+        for cat_feature in categorical_features_names:
+            cat_vars_ohe[features_first_occurrence_indices[cat_feature]] = feature_value_counts[cat_feature]
 
-            pred_fn = lambda x: np.array(model.predict_proba(x)[0])
 
-            self.cf = Counterfactual(pred_fn, query_instance_shape, distance_fn='l1', target_proba=1.0,
-                                target_class='other', max_iter=100, early_stop=50, lam_init=1e-3,
-                                max_lam_steps=15, tol=0.4, learning_rate_init=0.1,
-                                feature_range=(0, 1), eps=0.3, init='identity',
-                                decay=True, write_dir=None, debug=False)
-        else: #TF
-            model = tf.keras.models.load_model(model_path)
+        if isinstance(model, tf.keras.Model):
+            self.cfproto = CounterfactualProto(model, query_instance_shape, 
+                beta=.01, 
+                cat_vars=cat_vars_ohe, 
+                ohe=True, 
+                max_iterations=500,
+                feature_range=feature_ranges, 
+                c_init=1.0, 
+                c_steps=5,
+            )
+        else: #SKLEARN
+            # pred_fn = lambda x: np.array(model.predict_proba(x)[0])
+            # self.cf = CounterFactualProto(pred_fn)
+            print('SKLEARN NOT SUPPORTED FOR ALIBIPROTO FOR NOW')
 
-            self.cf = Counterfactual(model, query_instance_shape, distance_fn='l1', target_proba=1.0,
-                                target_class='other', max_iter=1000, early_stop=50, lam_init=1e-1,
-                                max_lam_steps=15, tol=0.4, learning_rate_init=0.1,
-                                feature_range=(0, 1), eps=0.1, init='identity',
-                                decay=True, write_dir=None, debug=False)
+    def fit(self, training_data_ohe_norm: npt.NDArray, distance_metric_categorical: str = 'abdm', disc_perc=[25, 50, 75]) -> None:
+        self.cfproto.fit(training_data_ohe_norm, d_type=distance_metric_categorical, disc_perc=disc_perc)
 
-    def generate_counterfactuals(self, query_instance_norm: pd.DataFrame | np.ndarray):
-        '''Generate counterfactuals for normalized query instance'''
-        if type(query_instance_norm) == pd.DataFrame:
-            explanation = self.cf.explain(query_instance_norm.to_numpy())
-        else:
-            explanation = self.cf.explain(query_instance_norm)
+    def generate_counterfactuals(self, query_instance_ohe_norm: npt.NDArray) -> npt.NDArray:
+        '''Generate counterfactuals for normalized ohe query instance'''
+        explanation = self.cfproto.explain(query_instance_ohe_norm)
         return explanation
 
    
