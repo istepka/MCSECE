@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List
 from carla import MLModel
 import tensorflow as tf
 import pandas as pd
@@ -6,10 +6,11 @@ import json
 
 class TFModelAdult(MLModel):
 
-    def __init__(self, data) -> None:
+    def __init__(self, model: tf.keras.Model, data: pd.DataFrame, columns_ohe_order: List[str]) -> None:
         super().__init__(data)
-        self.__load_constraints()
-        self._mymodel = self.__load_model()
+        self._mymodel = model#self.__load_model()
+
+        self.columns_order = columns_ohe_order
     
     def __call__(self, data):
         return self._mymodel(data)
@@ -17,7 +18,7 @@ class TFModelAdult(MLModel):
     # List of the feature order the ml model was trained on
     @property
     def feature_input_order(self):
-        return self.constraints['features_order']
+        return self.columns_order
 
     # The ML framework the model was trained on
     @property
@@ -60,25 +61,4 @@ class TFModelAdult(MLModel):
 
         return self._mymodel.predict(x)
 
-    def __load_model(self, filepath: str = '../models/adult_NN') -> tf.keras.Model:
-        # model = tf.keras.Sequential()
-        # model.add(tf.keras.layers.Input((self.constraints['features_count'],)))
-        # model.add(tf.keras.layers.Dense(64, activation='relu'))
-        # model.add(tf.keras.layers.Dropout(0.2))
-        # model.add(tf.keras.layers.Dense(32, activation='relu'))
-        # model.add(tf.keras.layers.Dropout(0.2))
-        # model.add(tf.keras.layers.Dense(16, activation='relu'))
-        # model.add(tf.keras.layers.Dropout(0.2))
-        # model.add(tf.keras.layers.Dense(2, activation='softmax'))
-
-        # model.load_weights(filepath)
-
-        model = tf.keras.models.load_model(filepath)
-        print(model.summary())
-
-        return model
-
-    def __load_constraints(self, filepath: str = '../data/adult_constraints.json') -> Dict:
-        with open('../data/adult_constraints.json') as f:
-            self.constraints = json.load(f)
-        return self.constraints
+    

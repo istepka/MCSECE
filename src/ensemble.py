@@ -85,9 +85,6 @@ class Ensemble:
         self.valid_counterfactuals: pd.DataFrame
         self.valid_actionable_counterfactuals: pd.DataFrame
 
-        
-
-
     def generate_counterfactuals(self, query_instance: pd.DataFrame) -> pd.DataFrame:
         '''
         Can ask only for one query instance at a time.
@@ -143,10 +140,17 @@ class Ensemble:
         if cfproto_cfs is None or len(cfproto_cfs) == 0:
             cfproto_cfs = counterfactuals.copy()
         print(f'CFPROTO generated: {cfproto_cfs.shape[0]}')
+
+
+        # CARLA
+        carla_cfs = self.__carla_generate_counterfactuals(query_instance=query_instance)
+        if carla_cfs is None or len(carla_cfs) == 0:
+            carla_cfs = counterfactuals.copy()
+        print(f'CARLA generated: {carla_cfs.shape[0]}') 
         
 
         # Combine all generated counterfactuals
-        counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs, wachter_cfs, cem_cfs, cfproto_cfs], ignore_index=True)
+        counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs, wachter_cfs, cem_cfs, cfproto_cfs, carla_cfs], ignore_index=True)
 
         counterfactuals[self.feature_name_to_predict] = self.__get_prediction_class_to_counterfactuals(counterfactuals)
 
@@ -157,7 +161,6 @@ class Ensemble:
         self.valid_actionable_counterfactuals = self.__filter_non_actionable(self.valid_counterfactuals, query_instance)
 
         return counterfactuals
-
 
     # EXPLAINERS
     def __init_dice(self) -> None:
@@ -184,7 +187,7 @@ class Ensemble:
             model=self.model_to_explain
         )
     
-    def __dice_generate_counterfactuals(self, query_instance: pd.DataFrame, cfs_total: int = 10, desired_class: str | int = 'opposite') -> pd.DataFrame:
+    def __dice_generate_counterfactuals(self, query_instance: pd.DataFrame, cfs_total: int = 20, desired_class: str | int = 'opposite') -> pd.DataFrame:
         dice_counterfactuals_df = self.dice_model.generate_counterfactuals(
             query_instance=query_instance,
             total_CFs=cfs_total,
@@ -356,6 +359,37 @@ class Ensemble:
 
         return cfproto_cfs_df
 
+    def __carla_generate_counterfactuals(self, query_instance: pd.DataFrame) -> pd.DataFrame:
+        
+        from carla_models import CarlaModels
+
+        # Reload model to avoid errors
+        if isinstance(self.model_to_explain, tf.keras.Model):
+                    self.model_to_explain = tf.keras.models.load_model(self.model_path)
+
+        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instance)
+
+        self.carla_models = CarlaModels(
+            self.train_dataset_pd,
+            self.model_to_explain,
+            self.continuous_columns_names,
+            self.categorical_columns_names,
+            self.non_actionable_columns_names,
+            self.feature_name_to_predict,
+            self.features_order_after_split,
+        )
+
+        carla_cfs_ohe_norm, explainers = self.carla_models.generate_counterfactuals(
+            query_instance_ohe_norm=query_instance_ohe_norm,
+        )
+
+        carla_cfs_ohe_norm['explainer'] = explainers
+        carla_cfs_ohe_norm = carla_cfs_ohe_norm.dropna()
+        explainers = carla_cfs_ohe_norm['explainer']
+
+        carla_cfs = self.transform_from_norm_ohe(carla_cfs_ohe_norm.drop(columns='explainer'))
+        carla_cfs['explainer'] = explainers
+        return carla_cfs
 
     # UTILITY FUNCTIONS 
     def transform_to_normalized_ohe(self, query_instance: pd.DataFrame) -> pd.DataFrame:
@@ -476,9 +510,6 @@ if __name__ == '__main__':
 
     with open('data/adult_constraints.json', 'r') as f:
         constr = json.load(f)
-
-
-    
     
     if explained_model_backend == 'sklearn':
         # SKLEARN

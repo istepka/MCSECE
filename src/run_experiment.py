@@ -21,7 +21,7 @@ CONSTRAINTS_PATH = 'data/adult_constraints.json'
 MODEL_PATH = 'models/adult_NN/'
 EXPLAINED_MODEL_BACKEND = 'tensorflow'
 
-INDEX_TO_EXPLAIN = 12
+INDEX_TO_EXPLAIN = 123
 
 SAVE_PATH = f'experiments/scores/{DATASET_NAME}_{EXPLAINED_MODEL_BACKEND}_i{INDEX_TO_EXPLAIN}_{date}.csv'
 
