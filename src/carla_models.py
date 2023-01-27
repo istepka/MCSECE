@@ -8,6 +8,7 @@ from carla.models.catalog import MLModelCatalog
 import warnings
 from carla.data.catalog import CsvCatalog
 import json
+from tqdm import tqdm
 
 from models.tfmodel import TFModelAdult
 
@@ -45,7 +46,7 @@ class CarlaModels:
         }
         self.ar_explainer = ActionableRecourse(self.model, ar_hyperparams)
 
-    def generate_counterfactuals(self, query_instance_ohe_norm: pd.DataFrame, 
+    def generate_counterfactuals(self, query_instance: pd.DataFrame, 
         growing_spheres_restarts: int = 15, face_restarts: int = 10,
         ) -> pd.DataFrame:
         '''
@@ -54,8 +55,9 @@ class CarlaModels:
 
         to_concat = list()
         explainers_list = list()
+        query_instance_ohe_norm = self.data_catalog.transform(query_instance)
 
-        for _ in range(growing_spheres_restarts):
+        for _ in tqdm(range(growing_spheres_restarts), desc='Growing Spheres generating'):
             gs_cf = self.gs_explainer.get_counterfactuals(query_instance_ohe_norm)
             to_concat.append(gs_cf)
             explainers_list.append('growing-spheres')
@@ -66,10 +68,10 @@ class CarlaModels:
         explainers_list.append('actionable-recourse')
 
 
-        for i in range(face_restarts):
+        for i in tqdm(range(face_restarts), desc='FACE generating'):
             face_hyperparams = {
                 'mode': 'knn',
-                'fraction': 0.01 * (i+1),
+                'fraction': 0.05,
             }
             self.face_explainer = Face(self.model, face_hyperparams)
             face_cf = self.face_explainer.get_counterfactuals(query_instance_ohe_norm)

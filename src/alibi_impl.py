@@ -117,7 +117,7 @@ class AlibiProto:
                 beta=.01, 
                 cat_vars=cat_vars_ohe, 
                 ohe=True, 
-                max_iterations=100,
+                max_iterations=200,
                 feature_range=feature_ranges, 
                 c_init=1.0, 
                 c_steps=5,

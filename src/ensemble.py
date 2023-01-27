@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import tensorflow as tf
 from sklearn.ensemble import RandomForestClassifier
+from time import time
 
 # Own
 from dice import DiceModel 
@@ -14,7 +15,7 @@ class Ensemble:
 
     def __init__(self, train_dataset: pd.DataFrame, constraints_config_dictionary: Dict,
         model_to_explain: tf.keras.Model | RandomForestClassifier, model_path: str,
-        list_of_explainers: List[str] = ['dice', 'fimap', 'cadex', 'wachter', 'cem', 'cfproto'],
+        list_of_explainers: List[str] = ['dice', 'cfec', 'alibi', 'carla'],
     ) -> None:
         
         self.train_dataset_pd = train_dataset
@@ -84,11 +85,14 @@ class Ensemble:
         self.all_counterfactuals: pd.DataFrame
         self.valid_counterfactuals: pd.DataFrame
         self.valid_actionable_counterfactuals: pd.DataFrame
+        self.exectution_times: Dict[str, int] = dict() 
 
     def generate_counterfactuals(self, query_instance: pd.DataFrame) -> pd.DataFrame:
         '''
         Can ask only for one query instance at a time.
         Has to be in pd.DataFrame format.
+
+        Return: valid and actionable countefactuals as data frame
         '''
         assert query_instance.shape[0] == 1, 'Only one query instance at a time supported!'
 
@@ -103,54 +107,83 @@ class Ensemble:
         print(f'X class: {query_instance_class_int}')
         print(f'Desired cf class: {desired_class}')
 
-        # generate DICE 
-        dice_cfs = self.__dice_generate_counterfactuals(query_instance=query_instance)
-        if dice_cfs is not None:
-            dice_cfs['explainer'] = 'dice'
-        else:
-            dice_cfs = counterfactuals.copy()
-        print(f'Dice generated: {dice_cfs.shape[0]}')
+        to_concat = list()
+
+        if 'dice' in self.list_of_explainers:
+            # generate DICE 
+            timer = time()
+            dice_cfs = self.__dice_generate_counterfactuals(query_instance=query_instance)
+            if dice_cfs is not None:
+                dice_cfs['explainer'] = 'dice'
+                to_concat.append(dice_cfs)
+            else:
+                dice_cfs = counterfactuals.copy()
+            self.exectution_times['dice'] = time() - timer
+            print(f'Dice generated: {dice_cfs.shape[0]}')
 
 
-        # generate CFEC
-        cfec_cfs_norm_ohe, cfec_explainers = self.cfec_model.generate_counterfactuals(
-            query_instance=query_instance_norm_ohe.iloc[0]
-        )
-        if cfec_cfs_norm_ohe is not None and len(cfec_cfs_norm_ohe) > 0:
-            cfec_cfs = self.transform_from_norm_ohe(cfec_cfs_norm_ohe)
-            cfec_cfs['explainer'] = cfec_explainers
-        else:
-            cfec_cfs = counterfactuals.copy()
-        print(f'CFEC generated: {cfec_cfs.shape[0]}')
-
-        # generate Wachter
-        wachter_cfs = self.__wachter_generate_counterfactuals(query_instace=query_instance, desired_class=desired_class)
-        if wachter_cfs is None or len(wachter_cfs) == 0:
-            wachter_cfs = counterfactuals.copy()
-        print(f'Wachter generated: {wachter_cfs.shape[0]}')
-
-        # generate CEM
-        cem_cfs = self.__cem_generate_counterfactuals(query_instance)
-        if cem_cfs is None or len(cem_cfs) == 0:
-            cem_cfs = counterfactuals.copy()
-        print(f'CEM generated: {cem_cfs.shape[0]}')
-
-        # generate CfProto
-        cfproto_cfs = self.__cfproto_generate_counterfactuals(query_instance)
-        if cfproto_cfs is None or len(cfproto_cfs) == 0:
-            cfproto_cfs = counterfactuals.copy()
-        print(f'CFPROTO generated: {cfproto_cfs.shape[0]}')
+        if 'cfec' in self.list_of_explainers:
+            # generate CFEC
+            timer = time()
+            cfec_cfs_norm_ohe, cfec_explainers = self.cfec_model.generate_counterfactuals(
+                query_instance=query_instance_norm_ohe.iloc[0]
+            )
+            if cfec_cfs_norm_ohe is not None and len(cfec_cfs_norm_ohe) > 0:
+                cfec_cfs = self.transform_from_norm_ohe(cfec_cfs_norm_ohe)
+                cfec_cfs['explainer'] = cfec_explainers
+                to_concat.append(cfec_cfs)
+            else:
+                cfec_cfs = counterfactuals.copy()
+            self.exectution_times['cfec'] = time() - timer
+            print(f'CFEC generated: {cfec_cfs.shape[0]}')
 
 
-        # CARLA
-        carla_cfs = self.__carla_generate_counterfactuals(query_instance=query_instance)
-        if carla_cfs is None or len(carla_cfs) == 0:
-            carla_cfs = counterfactuals.copy()
-        print(f'CARLA generated: {carla_cfs.shape[0]}') 
+        if 'alibi' in self.list_of_explainers:
+            # generate Wachter
+            timer = time()
+            wachter_cfs = self.__wachter_generate_counterfactuals(query_instace=query_instance, desired_class=desired_class)
+            if wachter_cfs is None or len(wachter_cfs) == 0:
+                wachter_cfs = counterfactuals.copy()
+            wachter_cfs['explainer'] = 'wachter'
+            to_concat.append(wachter_cfs)
+            self.exectution_times['wachter'] = time() - timer
+            print(f'Wachter generated: {wachter_cfs.shape[0]}')
+
+            # generate CEM
+            timer = time()
+            cem_cfs = self.__cem_generate_counterfactuals(query_instance)
+            if cem_cfs is None or len(cem_cfs) == 0:
+                cem_cfs = counterfactuals.copy()
+            cem_cfs['explainer'] = 'cem'
+            to_concat.append(cem_cfs)
+            self.exectution_times['cem'] = time() - timer
+            print(f'CEM generated: {cem_cfs.shape[0]}')
+
+            # generate CfProto
+            timer = time()
+            cfproto_cfs = self.__cfproto_generate_counterfactuals(query_instance)
+            if cfproto_cfs is None or len(cfproto_cfs) == 0:
+                cfproto_cfs = counterfactuals.copy()
+            cfproto_cfs['explainer'] = 'cfproto'
+            to_concat.append(cfproto_cfs)
+            self.exectution_times['cem'] = time() - timer
+            print(f'CFPROTO cfproto: {cfproto_cfs.shape[0]}')
+
+        if 'carla' in self.list_of_explainers:
+            # CARLA
+            timer = time()
+            carla_cfs = self.__carla_generate_counterfactuals(query_instance=query_instance)
+            if carla_cfs is None or len(carla_cfs) == 0:
+                carla_cfs = counterfactuals.copy()
+            to_concat.append(carla_cfs)
+            self.exectution_times['carla'] = time() - timer
+            print(f'CARLA generated: {carla_cfs.shape[0]}') 
         
 
         # Combine all generated counterfactuals
-        counterfactuals = pd.concat([counterfactuals, dice_cfs, cfec_cfs, wachter_cfs, cem_cfs, cfproto_cfs, carla_cfs], ignore_index=True)
+        counterfactuals = pd.concat([counterfactuals] + to_concat, ignore_index=True)
+
+        print(counterfactuals['explainer'].tolist())
 
         counterfactuals[self.feature_name_to_predict] = self.__get_prediction_class_to_counterfactuals(counterfactuals)
 
@@ -160,7 +193,7 @@ class Ensemble:
         self.valid_counterfactuals = self.__filter_only_valid(self.counterfactuals_clipped, query_instance)
         self.valid_actionable_counterfactuals = self.__filter_non_actionable(self.valid_counterfactuals, query_instance)
 
-        return counterfactuals
+        return self.valid_actionable_counterfactuals.reset_index(drop=True)
 
     # EXPLAINERS
     def __init_dice(self) -> None:
@@ -367,20 +400,20 @@ class Ensemble:
         if isinstance(self.model_to_explain, tf.keras.Model):
                     self.model_to_explain = tf.keras.models.load_model(self.model_path)
 
-        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instance)
+        #query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instance)
 
         self.carla_models = CarlaModels(
-            self.train_dataset_pd,
-            self.model_to_explain,
-            self.continuous_columns_names,
-            self.categorical_columns_names,
-            self.non_actionable_columns_names,
-            self.feature_name_to_predict,
-            self.features_order_after_split,
+            train_dataset=self.train_dataset_pd,
+            explained_model=self.model_to_explain,
+            continous_columns=self.continuous_columns_names,
+            categorical_columns=self.categorical_columns_names,
+            nonactionable_columns=self.non_actionable_columns_names,
+            target_feature_name=self.feature_name_to_predict,
+            columns_order_ohe=self.features_order_after_split,
         )
 
         carla_cfs_ohe_norm, explainers = self.carla_models.generate_counterfactuals(
-            query_instance_ohe_norm=query_instance_ohe_norm,
+            query_instance=query_instance,
         )
 
         carla_cfs_ohe_norm['explainer'] = explainers
@@ -458,7 +491,7 @@ class Ensemble:
 
         mask = counterfactuals[self.feature_name_to_predict].astype('int') != int(query_class)
 
-        return counterfactuals[mask]
+        return counterfactuals[mask].reset_index(drop=True)
 
     def __filter_non_actionable(self, counterfactuals: pd.DataFrame, query_instance: pd.DataFrame) -> pd.DataFrame:
         '''
@@ -473,7 +506,7 @@ class Ensemble:
                 _mask = np.isclose(counterfactuals[col].to_numpy().astype('float64'), query_instance[col].to_numpy().astype('float64'))
             mask = mask & _mask
 
-        return counterfactuals[mask]
+        return counterfactuals[mask].reset_index(drop=True)
 
     # GETTERS
     def get_all_counterfactuals(self) -> pd.DataFrame:
@@ -491,7 +524,33 @@ class Ensemble:
         '''
         return self.valid_actionable_counterfactuals
 
-     
+    def get_quantitative_stats(self) -> Dict:
+        '''
+        Get quatitative stats for generated counterfactuals. 
+        '''
+        stats = dict()
+
+        stats['dataset'] = self.dataset_shortname
+        stats['all_cfs_count'] = int(self.all_counterfactuals.shape[0])
+        stats['valid_cfs_count'] = int(self.valid_counterfactuals.shape[0])
+        stats['valid_actionable_cfs_count'] = int(self.valid_actionable_counterfactuals.shape[0])
+        stats['execution_times'] = self.exectution_times
+
+        stats['explainers'] = dict()
+        for explainer in np.unique(self.all_counterfactuals['explainer']):
+            stats['explainers'][explainer] = dict()
+            stats['explainers'][explainer]['all_cfs_count'] = int(
+                self.all_counterfactuals[self.all_counterfactuals['explainer'] == explainer].shape[0]
+                )
+            stats['explainers'][explainer]['valid_cfs_count'] = int(
+                self.valid_counterfactuals[self.valid_counterfactuals['explainer'] == explainer].shape[0]
+                )
+            stats['explainers'][explainer]['valid_actionable_cfs_count'] = int(
+                self.valid_actionable_counterfactuals[self.valid_actionable_counterfactuals['explainer'] == explainer].shape[0]
+                )
+
+        return stats
+
 
 if __name__ == '__main__':
     explained_model_backend = 'tensorflow' # 'sklearn' or 'tensorflow'
