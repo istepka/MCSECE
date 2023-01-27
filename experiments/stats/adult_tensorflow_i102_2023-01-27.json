@@ -1,0 +1,91 @@
+{
+ "dataset": "adult",
+ "all_cfs_count": 77,
+ "valid_cfs_count": 65,
+ "valid_actionable_cfs_count": 56,
+ "execution_times": {
+  "dice": 2.8364484310150146,
+  "cfec": 1.594508171081543,
+  "wachter": 38.54289984703064,
+  "cem": 3.377866268157959,
+  "cfproto": 13.898088693618774,
+  "carla": 31.041890144348145
+ },
+ "explainers": {
+  "cadex": {
+   "all_cfs_count": 5,
+   "valid_cfs_count": 5,
+   "valid_actionable_cfs_count": 5,
+   "pareto_frontier_count": 3
+  },
+  "cem": {
+   "all_cfs_count": 1,
+   "valid_cfs_count": 1,
+   "valid_actionable_cfs_count": 1,
+   "pareto_frontier_count": 0
+  },
+  "cfproto": {
+   "all_cfs_count": 10,
+   "valid_cfs_count": 10,
+   "valid_actionable_cfs_count": 1,
+   "pareto_frontier_count": 0
+  },
+  "dice": {
+   "all_cfs_count": 20,
+   "valid_cfs_count": 20,
+   "valid_actionable_cfs_count": 20,
+   "pareto_frontier_count": 1
+  },
+  "face": {
+   "all_cfs_count": 10,
+   "valid_cfs_count": 10,
+   "valid_actionable_cfs_count": 10,
+   "pareto_frontier_count": 3
+  },
+  "fimap": {
+   "all_cfs_count": 6,
+   "valid_cfs_count": 3,
+   "valid_actionable_cfs_count": 3,
+   "pareto_frontier_count": 0
+  },
+  "growing-spheres": {
+   "all_cfs_count": 15,
+   "valid_cfs_count": 14,
+   "valid_actionable_cfs_count": 14,
+   "pareto_frontier_count": 0
+  },
+  "wachter": {
+   "all_cfs_count": 10,
+   "valid_cfs_count": 2,
+   "valid_actionable_cfs_count": 2,
+   "pareto_frontier_count": 0
+  }
+ },
+ "TRAIN_DATASET_PATH": "data/adult_train.csv",
+ "TEST_DATASET_PATH": "data/adult_test.csv",
+ "DATASET_NAME": "adult",
+ "CONSTRAINTS_PATH": "data/adult_constraints.json",
+ "MODEL_PATH": "models/adult_NN/",
+ "EXPLAINED_MODEL_BACKEND": "tensorflow",
+ "INDEX_TO_EXPLAIN": 102,
+ "SAVE_PATH_SCORES": "experiments/scores/adult_tensorflow_i102_2023-01-27.csv",
+ "SAVE_PATH_STATS": "experiments/stats/adult_tensorflow_i102_2023-01-27.json",
+ "PREFERENCES_RANKING": [
+  0,
+  4,
+  2,
+  3,
+  5,
+  1
+ ],
+ "K_NEIGHBORS_FEASIB": 3,
+ "K_NEIGHBORS_DISCRIMINATIVE": 9,
+ "ENSEMBLE_INIT_ELAPSED_TIME": 5.746207237243652,
+ "ENSEMBLE_GENERATION_ELAPSED_TIME": 91.61662912368774,
+ "PARETO_METRICS": [
+  "Proximity",
+  "K_Feasibility(3)",
+  "DiscriminativePower(9)"
+ ],
+ "PARETO_FRONTIERS_ALL": 7
+}

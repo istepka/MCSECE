@@ -166,7 +166,7 @@ class Ensemble:
                 cfproto_cfs = counterfactuals.copy()
             cfproto_cfs['explainer'] = 'cfproto'
             to_concat.append(cfproto_cfs)
-            self.exectution_times['cem'] = time() - timer
+            self.exectution_times['cfproto'] = time() - timer
             print(f'CFPROTO cfproto: {cfproto_cfs.shape[0]}')
 
         if 'carla' in self.list_of_explainers:

@@ -25,7 +25,7 @@ HYPERPARAMETERS['CONSTRAINTS_PATH'] = 'data/adult_constraints.json'
 HYPERPARAMETERS['MODEL_PATH'] = 'models/adult_NN/'
 HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND'] = 'tensorflow'
 
-HYPERPARAMETERS['INDEX_TO_EXPLAIN'] = 0
+HYPERPARAMETERS['INDEX_TO_EXPLAIN'] = 103
 
 HYPERPARAMETERS['SAVE_PATH_SCORES'] = f"experiments/scores/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
 HYPERPARAMETERS['SAVE_PATH_STATS'] = f"experiments/stats/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.json"
@@ -38,6 +38,8 @@ HYPERPARAMETERS['K_NEIGHBORS_DISCRIMINATIVE'] = 9
 
 
 if __name__ == '__main__':
+    experiment_duration = time()
+
     explained_model_backend = 'tensorflow' # 'sklearn' or 'tensorflow'
 
 
@@ -174,6 +176,7 @@ if __name__ == '__main__':
         explainer_pareto_count = np.sum(scores[pareto_mask]['explainer'] == explainer)
         stats['explainers'][explainer]['pareto_frontier_count'] = int(explainer_pareto_count)
 
+    # Join both dictionaries
     stats_and_hypers_dic = stats | HYPERPARAMETERS
 
     with open(HYPERPARAMETERS['SAVE_PATH_STATS'], 'w') as f:
@@ -183,3 +186,7 @@ if __name__ == '__main__':
 
     print(scores)
     print(stats)
+
+
+    experiment_duration = time() - experiment_duration
+    print(f'Experiment duration: {experiment_duration}')

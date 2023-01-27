@@ -1,0 +1,82 @@
+{
+ "dataset": "adult",
+ "all_cfs_count": 60,
+ "valid_cfs_count": 38,
+ "valid_actionable_cfs_count": 35,
+ "execution_times": {
+  "dice": 2.712327480316162,
+  "cfec": 1.8008112907409668,
+  "wachter": 31.489136695861816,
+  "cem": 3.2672677040100098,
+  "cfproto": 12.86089015007019,
+  "carla": 29.43588900566101
+ },
+ "explainers": {
+  "cadex": {
+   "all_cfs_count": 7,
+   "valid_cfs_count": 7,
+   "valid_actionable_cfs_count": 7,
+   "pareto_frontier_count": 1
+  },
+  "cem": {
+   "all_cfs_count": 1,
+   "valid_cfs_count": 0,
+   "valid_actionable_cfs_count": 0
+  },
+  "cfproto": {
+   "all_cfs_count": 6,
+   "valid_cfs_count": 6,
+   "valid_actionable_cfs_count": 3,
+   "pareto_frontier_count": 0
+  },
+  "dice": {
+   "all_cfs_count": 20,
+   "valid_cfs_count": 20,
+   "valid_actionable_cfs_count": 20,
+   "pareto_frontier_count": 4
+  },
+  "face": {
+   "all_cfs_count": 10,
+   "valid_cfs_count": 0,
+   "valid_actionable_cfs_count": 0
+  },
+  "fimap": {
+   "all_cfs_count": 6,
+   "valid_cfs_count": 5,
+   "valid_actionable_cfs_count": 5,
+   "pareto_frontier_count": 0
+  },
+  "wachter": {
+   "all_cfs_count": 10,
+   "valid_cfs_count": 0,
+   "valid_actionable_cfs_count": 0
+  }
+ },
+ "TRAIN_DATASET_PATH": "data/adult_train.csv",
+ "TEST_DATASET_PATH": "data/adult_test.csv",
+ "DATASET_NAME": "adult",
+ "CONSTRAINTS_PATH": "data/adult_constraints.json",
+ "MODEL_PATH": "models/adult_NN/",
+ "EXPLAINED_MODEL_BACKEND": "tensorflow",
+ "INDEX_TO_EXPLAIN": 6,
+ "SAVE_PATH_SCORES": "experiments/scores/adult_tensorflow_i6_2023-01-27.csv",
+ "SAVE_PATH_STATS": "experiments/stats/adult_tensorflow_i6_2023-01-27.json",
+ "PREFERENCES_RANKING": [
+  0,
+  4,
+  2,
+  3,
+  5,
+  1
+ ],
+ "K_NEIGHBORS_FEASIB": 3,
+ "K_NEIGHBORS_DISCRIMINATIVE": 9,
+ "ENSEMBLE_INIT_ELAPSED_TIME": 5.66951060295105,
+ "ENSEMBLE_GENERATION_ELAPSED_TIME": 81.77869439125061,
+ "PARETO_METRICS": [
+  "Proximity",
+  "K_Feasibility(3)",
+  "DiscriminativePower(9)"
+ ],
+ "PARETO_FRONTIERS_ALL": 5
+}
