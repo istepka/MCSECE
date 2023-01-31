@@ -9,6 +9,7 @@ import warnings
 from carla.data.catalog import CsvCatalog
 import json
 from tqdm import tqdm
+import time
 
 from models.tfmodel import TFModelAdult
 
@@ -41,33 +42,40 @@ class CarlaModels:
         # init explainers
         self.gs_explainer = GrowingSpheres(self.model)
 
+        # AR only once because it gets the same cf
         ar_hyperparams = {
-            'fs_size': 100
+            "fs_size": 300, #default is 100
+            "discretize": False,
+            "sample": True,
         }
         self.ar_explainer = ActionableRecourse(self.model, ar_hyperparams)
 
     def generate_counterfactuals(self, query_instance: pd.DataFrame, 
-        growing_spheres_restarts: int = 15, face_restarts: int = 10,
+        growing_spheres_restarts: int = 20, face_restarts: int = 10,
         ) -> pd.DataFrame:
         '''
         Growing spheres is fast so can have more restarts than face
         '''
-
+        execution_times = dict()
         to_concat = list()
         explainers_list = list()
         query_instance_ohe_norm = self.data_catalog.transform(query_instance)
 
+        start = time.time()
         for _ in tqdm(range(growing_spheres_restarts), desc='Growing Spheres generating'):
             gs_cf = self.gs_explainer.get_counterfactuals(query_instance_ohe_norm)
             to_concat.append(gs_cf)
             explainers_list.append('growing-spheres')
+        execution_times['growing-spheres'] = time.time() - start
 
-        # AR only once because it gets the same cf
+        start = time.time()
         ar_cf = self.ar_explainer.get_counterfactuals(query_instance_ohe_norm)
         to_concat.append(ar_cf)
         explainers_list.append('actionable-recourse')
+        execution_times['actionable-recourse'] = time.time() - start
 
 
+        start = time.time()
         for i in tqdm(range(face_restarts), desc='FACE generating'):
             face_hyperparams = {
                 'mode': 'knn',
@@ -77,11 +85,12 @@ class CarlaModels:
             face_cf = self.face_explainer.get_counterfactuals(query_instance_ohe_norm)
             to_concat.append(face_cf)
             explainers_list.append('face')
+        execution_times['face'] = time.time() - start
 
 
         concatenated = pd.concat(to_concat, ignore_index=True).reset_index(drop=True)
         #concatenated['explainer'] = explainers_list
-        return concatenated, explainers_list
+        return concatenated, explainers_list, execution_times
 
         
 

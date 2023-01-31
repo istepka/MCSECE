@@ -57,7 +57,7 @@ class TFModelAdult(MLModel):
     def predict_proba(self, x):
 
         if isinstance(x, pd.DataFrame):
-            x = x[self.feature_input_order]
+            x = x[self.feature_input_order].to_numpy()
 
         return self._mymodel.predict(x)
 

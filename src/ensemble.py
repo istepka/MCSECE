@@ -171,12 +171,10 @@ class Ensemble:
 
         if 'carla' in self.list_of_explainers:
             # CARLA
-            timer = time()
             carla_cfs = self.__carla_generate_counterfactuals(query_instance=query_instance)
             if carla_cfs is None or len(carla_cfs) == 0:
                 carla_cfs = counterfactuals.copy()
             to_concat.append(carla_cfs)
-            self.exectution_times['carla'] = time() - timer
             print(f'CARLA generated: {carla_cfs.shape[0]}') 
         
 
@@ -238,7 +236,7 @@ class Ensemble:
             model = self.model_to_explain,
             columns_to_change=self.actionable_mask_ohe_indices,
             cadex_max_feature_changes=15,
-            cadex_max_epochs=20
+            cadex_max_epochs=50
         )
 
     def __fit_cfec_ece(self, fimap_load_models_date: str = '2023-01-26') -> None:
@@ -412,9 +410,12 @@ class Ensemble:
             columns_order_ohe=self.features_order_after_split,
         )
 
-        carla_cfs_ohe_norm, explainers = self.carla_models.generate_counterfactuals(
+        carla_cfs_ohe_norm, explainers, execution_times_carla = self.carla_models.generate_counterfactuals(
             query_instance=query_instance,
         )
+
+        for _explainer, _time in execution_times_carla.items():
+            self.exectution_times[_explainer] = _time
 
         carla_cfs_ohe_norm['explainer'] = explainers
         carla_cfs_ohe_norm = carla_cfs_ohe_norm.dropna()

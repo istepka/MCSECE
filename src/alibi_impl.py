@@ -81,7 +81,7 @@ class AlibiCEM:
             beta = .1 
             c_init = 10  
             c_steps = 10  
-            max_iterations = 200
+            max_iterations = 300
             lr_init = 1e-2  
             # initialize CEM explainer and explain instance
             self.cem = CEM(model, mode, shape, kappa=kappa, beta=beta, feature_range=feature_ranges,
@@ -117,7 +117,7 @@ class AlibiProto:
                 beta=.01, 
                 cat_vars=cat_vars_ohe, 
                 ohe=True, 
-                max_iterations=200,
+                max_iterations=500,
                 feature_range=feature_ranges, 
                 c_init=1.0, 
                 c_steps=5,
