@@ -6,36 +6,49 @@ import pandas as pd
 import numpy as np
 from datetime import datetime
 from time import time
-
+import argparse
+ 
 from ensemble import Ensemble
 from utils.scores import get_scores
 from utils.transformations import min_max_normalization, transform_to_sparse
 from pareto import get_pareto_optimal_mask
 
-HYPERPARAMETERS = dict()
+
+parser = argparse.ArgumentParser(description="Just an example",
+                                 formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument("dataset", help="Dataset name", choices={"adult", "german"})
+parser.add_argument("index", help="Test data index to explain")
+args = parser.parse_args()
+config = vars(args)
+
+print(config)
+print('Dataset to use', config['dataset'])
+print('Index to explain', config['index'])
+
 
 date = datetime.now().strftime(r"%Y-%m-%d")  
 
-HYPERPARAMETERS['TRAIN_DATASET_PATH'] = 'data/adult_train.csv'
-HYPERPARAMETERS['TEST_DATASET_PATH'] = 'data/adult_test.csv'
+# These two parameters should be set in the python call
+HYPERPARAMETERS = dict()
+HYPERPARAMETERS['DATASET_NAME'] = config['dataset']
+HYPERPARAMETERS['INDEX_TO_EXPLAIN'] = int(config['index'])
 
-HYPERPARAMETERS['DATASET_NAME'] = 'adult'
-HYPERPARAMETERS['CONSTRAINTS_PATH'] = 'data/adult_constraints.json'
+HYPERPARAMETERS['TRAIN_DATASET_PATH'] = f'data/{HYPERPARAMETERS["DATASET_NAME"]}_train.csv'
+HYPERPARAMETERS['TEST_DATASET_PATH'] = f'data/{HYPERPARAMETERS["DATASET_NAME"]}_test.csv'
+HYPERPARAMETERS['CONSTRAINTS_PATH'] = f'data/{HYPERPARAMETERS["DATASET_NAME"]}_constraints.json'
+HYPERPARAMETERS['MODEL_PATH'] = f'models/{HYPERPARAMETERS["DATASET_NAME"]}_NN/'
 
-HYPERPARAMETERS['MODEL_PATH'] = 'models/adult_NN/'
 HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND'] = 'tensorflow'
-
-HYPERPARAMETERS['INDEX_TO_EXPLAIN'] = 103
 
 HYPERPARAMETERS['SAVE_PATH_SCORES'] = f"experiments/scores/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
 HYPERPARAMETERS['SAVE_PATH_STATS'] = f"experiments/stats/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.json"
 
-
-#----------
 HYPERPARAMETERS['PREFERENCES_RANKING'] = [0, 4, 2, 3, 5, 1]
 HYPERPARAMETERS['K_NEIGHBORS_FEASIB'] = 3
 HYPERPARAMETERS['K_NEIGHBORS_DISCRIMINATIVE'] = 9
 
+max_index = pd.read_csv(HYPERPARAMETERS['TEST_DATASET_PATH']).shape[0] - 1
+assert int(config['index']) <= max_index, f'Passed index is greater than the test dataset size. Please pass index in range 0-{max_index}'
 
 if __name__ == '__main__':
     experiment_duration = time()
@@ -97,6 +110,7 @@ if __name__ == '__main__':
 
 
     target_feature_name = constr['target_feature']
+    HYPERPARAMETERS['ORIGINAL_X_CLASS'] = test_dataset[HYPERPARAMETERS['INDEX_TO_EXPLAIN']:HYPERPARAMETERS['INDEX_TO_EXPLAIN'] + 1][target_feature_name].to_numpy()[0]
 
     continous_indices = list()
     categorical_indices = list()
@@ -145,7 +159,7 @@ if __name__ == '__main__':
         continous_indices=continous_indices,
         categorical_indices=categorical_indices,
         preferences_ranking=HYPERPARAMETERS['PREFERENCES_RANKING'],
-        k_neighbors_feasib=HYPERPARAMETERS['K_NEIGHBORS_FEASIB'],
+        k_neighbors_feasib=HYPERPARAMETERS['K_NEIGHBORS_FEASIB'], 
         k_neighbors_discriminative=HYPERPARAMETERS['K_NEIGHBORS_DISCRIMINATIVE']
         ).reset_index(drop=True)
 
@@ -172,8 +186,11 @@ if __name__ == '__main__':
 
     print(scores['explainer'].tolist())
 
-    for explainer in np.unique(scores['explainer']):
-        explainer_pareto_count = np.sum(scores[pareto_mask]['explainer'] == explainer)
+    for explainer in stats['explainers'].keys():
+        if explainer in np.unique(scores['explainer']):
+            explainer_pareto_count = np.sum(scores[pareto_mask]['explainer'] == explainer)
+        else:
+            explainer_pareto_count = 0
         stats['explainers'][explainer]['pareto_frontier_count'] = int(explainer_pareto_count)
 
     # Join both dictionaries
