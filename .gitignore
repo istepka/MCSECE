@@ -4,6 +4,9 @@ CARLA/*
 archive.ics.*
 images/
 
+experiments/*.json
+experiments/*.csv
+
 *s_adult_tensorflow*
 *g_adult_tensorflow*
 *s_adult_sklearn*
