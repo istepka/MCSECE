@@ -430,14 +430,14 @@ class Ensemble:
         '''Transform original dataframe into one-hot-encoded and normalized form.'''
         query_instance_ohe = transform_to_sparse(
             _df = query_instance,
-            original_df=self.train_dataset_pd.drop(columns="income"),
+            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
             categorical_features=self.categorical_columns_names,
             continuous_features=self.continuous_columns_names
         )
 
         query_instance_ohe_norm = min_max_normalization(
             _df=query_instance_ohe,
-            original_df=self.train_dataset_pd.drop(columns="income"),
+            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
             continuous_features=self.continuous_columns_names
         )
 
@@ -447,13 +447,13 @@ class Ensemble:
         '''Transform from one-hot-encoded normalized form into original dataframe.'''
         query_instance_ohe = inverse_min_max_normalization(
             _df=query_instance_norm_ohe,
-            original_df=self.train_dataset_pd.drop(columns="income"),
+            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
             continuous_features=self.continuous_columns_names
         )
 
         query_instance = inverse_transform_to_sparse(
             sparse_df=query_instance_ohe,
-            original_df=self.train_dataset_pd.drop(columns="income"),
+            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
             categorical_features=self.categorical_columns_names,
             continuous_features=self.continuous_columns_names
         )

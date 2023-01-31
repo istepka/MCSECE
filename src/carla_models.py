@@ -77,9 +77,18 @@ class CarlaModels:
 
         start = time.time()
         for i in tqdm(range(face_restarts), desc='FACE generating'):
+
+            # Dynamically select fraction to prevent FACE from throwing errors because of the too small neighbourhood
+            fraction = 0.05
+            if self.data_catalog.df_train.shape[0] * 0.05 < 50:
+                if self.data_catalog.df_train.shape[0] * 0.1 < 50:
+                    fraction = 0.2
+                else:
+                    fraction = 0.1
+            
             face_hyperparams = {
                 'mode': 'knn',
-                'fraction': 0.05,
+                'fraction': fraction,
             }
             self.face_explainer = Face(self.model, face_hyperparams)
             face_cf = self.face_explainer.get_counterfactuals(query_instance_ohe_norm)

@@ -77,9 +77,9 @@ if __name__ == '__main__':
 
     # Make sure that order is correct
     train_dataset = train_dataset[constr['features_order_nonsplit']]
+    target_feature_name = constr['target_feature']
 
-
-    test_dataset_no_target = test_dataset.drop(columns='income', inplace=False)
+    test_dataset_no_target = test_dataset.drop(columns=target_feature_name, inplace=False)
 
     query_instance = test_dataset_no_target[HYPERPARAMETERS['INDEX_TO_EXPLAIN']:HYPERPARAMETERS['INDEX_TO_EXPLAIN'] + 1]
 
@@ -109,7 +109,6 @@ if __name__ == '__main__':
     print('----'*10)
 
 
-    target_feature_name = constr['target_feature']
     HYPERPARAMETERS['ORIGINAL_X_CLASS'] = test_dataset[HYPERPARAMETERS['INDEX_TO_EXPLAIN']:HYPERPARAMETERS['INDEX_TO_EXPLAIN'] + 1][target_feature_name].to_numpy()[0]
 
     continous_indices = list()
