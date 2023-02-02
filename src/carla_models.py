@@ -69,9 +69,12 @@ class CarlaModels:
         execution_times['growing-spheres'] = time.time() - start
 
         start = time.time()
-        ar_cf = self.ar_explainer.get_counterfactuals(query_instance_ohe_norm)
-        to_concat.append(ar_cf)
-        explainers_list.append('actionable-recourse')
+        try: # Try catch because on rare ocasions something happens with coefficents inside recourse library (in test happened only 1 in 250 instances)
+            ar_cf = self.ar_explainer.get_counterfactuals(query_instance_ohe_norm)
+            to_concat.append(ar_cf)
+            explainers_list.append('actionable-recourse')
+        except AssertionError:
+            print('Actionable Recourse threw an asserion error')
         execution_times['actionable-recourse'] = time.time() - start
 
 
