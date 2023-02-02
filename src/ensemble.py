@@ -288,6 +288,10 @@ class Ensemble:
             if lst:
                 for cf in lst:
                     wachter_counterfactuals.append(cf['X'])
+        
+        # If no counterfactuals found return none
+        if len(wachter_counterfactuals) == 0:
+            return None
 
         # Reshape to (n, features)
         wachter_counterfactuals = np.array(wachter_counterfactuals).reshape(-1, query_instance_ohe_norm.shape[1])
@@ -365,6 +369,10 @@ class Ensemble:
         self.cfproto_model.fit(self.train_dataset_ohe_normalized.to_numpy())
 
         explanation = self.cfproto_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy())
+
+        # If no coutnterfactuals found
+        if explanation is None or len(explanation['data']['all']) == 0:
+            return None
 
          # Get counterfactuals from the optimization process
         cfproto_counterfactuals = []
