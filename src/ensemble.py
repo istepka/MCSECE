@@ -1,5 +1,5 @@
 # Libs
-from typing import Dict, List
+from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -87,7 +87,7 @@ class Ensemble:
         self.valid_actionable_counterfactuals: pd.DataFrame
         self.exectution_times: Dict[str, int] = dict() 
 
-    def generate_counterfactuals(self, query_instance: pd.DataFrame) -> pd.DataFrame:
+    def generate_counterfactuals(self, query_instance: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         '''
         Can ask only for one query instance at a time.
         Has to be in pd.DataFrame format.
@@ -191,7 +191,7 @@ class Ensemble:
         self.valid_counterfactuals = self.__filter_only_valid(self.counterfactuals_clipped, query_instance)
         self.valid_actionable_counterfactuals = self.__filter_non_actionable(self.valid_counterfactuals, query_instance)
 
-        return self.valid_actionable_counterfactuals.reset_index(drop=True)
+        return self.all_counterfactuals.reset_index(drop=True), self.valid_counterfactuals.reset_index(drop=True)
 
     # EXPLAINERS
     def __init_dice(self) -> None:

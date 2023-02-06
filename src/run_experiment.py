@@ -7,6 +7,7 @@ import numpy as np
 from datetime import datetime
 from time import time
 import argparse
+import os
  
 from ensemble import Ensemble
 from utils.scores import get_scores
@@ -40,8 +41,10 @@ HYPERPARAMETERS['MODEL_PATH'] = f'models/{HYPERPARAMETERS["DATASET_NAME"]}_NN/'
 
 HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND'] = 'tensorflow'
 
-HYPERPARAMETERS['SAVE_PATH_SCORES'] = f"experiments/scores/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
-HYPERPARAMETERS['SAVE_PATH_STATS'] = f"experiments/stats/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.json"
+HYPERPARAMETERS['SAVE_PATH_SCORES'] = f"experiments/{date}/scores/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
+HYPERPARAMETERS['SAVE_PATH_STATS'] = f"experiments/{date}/stats/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.json"
+HYPERPARAMETERS['SAVE_PATH_COUNTERFACTUALS'] = f"experiments/{date}/counterfactuals/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
+HYPERPARAMETERS['SAVE_PATH_VALID_COUNTERFACTUALS'] = f"experiments/{date}/valid_counterfactuals/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
 
 HYPERPARAMETERS['PREFERENCES_RANKING'] = [0, 4, 2, 3, 5, 1]
 HYPERPARAMETERS['K_NEIGHBORS_FEASIB'] = 3
@@ -51,6 +54,13 @@ max_index = pd.read_csv(HYPERPARAMETERS['TEST_DATASET_PATH']).shape[0] - 1
 assert int(config['index']) <= max_index, f'Passed index is greater than the test dataset size. Please pass index in range 0-{max_index}'
 
 if __name__ == '__main__':
+    #PREPARE EXPERIMENT DIRECTORY
+    if not os.path.exists(f'experiments/{date}'):
+        os.makedirs(f'experiments/{date}/scores')
+        os.makedirs(f'experiments/{date}/stats')
+        os.makedirs(f'experiments/{date}/counterfactuals')
+        os.makedirs(f'experiments/{date}/valid_counterfactuals')
+
     experiment_duration = time()
 
     explained_model_backend = 'tensorflow' # 'sklearn' or 'tensorflow'
@@ -82,7 +92,7 @@ if __name__ == '__main__':
     test_dataset_no_target = test_dataset.drop(columns=target_feature_name, inplace=False)
 
     query_instance = test_dataset_no_target[HYPERPARAMETERS['INDEX_TO_EXPLAIN']:HYPERPARAMETERS['INDEX_TO_EXPLAIN'] + 1]
-
+    HYPERPARAMETERS['QUERY_INSTANCE'] = query_instance.to_dict()
     print(query_instance)
 
     # INIT ENSEMBLE
@@ -95,7 +105,7 @@ if __name__ == '__main__':
     HYPERPARAMETERS['ENSEMBLE_INIT_ELAPSED_TIME'] = ensemble_init_elapsed_time
 
     ensemble_gen_elapsed_time = time()
-    cfs = enseble.generate_counterfactuals(query_instance)
+    cfs, valid_cfs = enseble.generate_counterfactuals(query_instance)
     ensemble_gen_elapsed_time = time() - ensemble_gen_elapsed_time
     HYPERPARAMETERS['ENSEMBLE_GENERATION_ELAPSED_TIME'] = ensemble_gen_elapsed_time
 
@@ -199,6 +209,8 @@ if __name__ == '__main__':
         json.dump(stats_and_hypers_dic, f, indent=1)
 
     scores.to_csv(HYPERPARAMETERS['SAVE_PATH_SCORES'], index=False)
+    cfs.to_csv(HYPERPARAMETERS['SAVE_PATH_COUNTERFACTUALS'], index=False)
+    valid_cfs.to_csv(HYPERPARAMETERS['SAVE_PATH_VALID_COUNTERFACTUALS'], index=False)
 
     print(scores)
     print(stats)
