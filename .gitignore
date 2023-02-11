@@ -5,7 +5,7 @@
 # src/modules/
 src/modules/backup/*
 src/modules/*.zip
-src/models/*
+src/models/cfec/*
 CARLA/*
 .vscode/
 archive.ics.*
@@ -16,10 +16,10 @@ data/test*
 experiments/2023-*
 
 # Ignore FIMAP models - they are pretty big in size 
-*s_adult_tensorflow*
-*g_adult_tensorflow*
-*s_adult_sklearn*
-*g_adult_sklearn*
+# *s_adult_tensorflow*
+# *g_adult_tensorflow*
+# *s_adult_sklearn*
+# *g_adult_sklearn*
 
 # ---------------------------------------------------------------------
 # STANDARD GIT-PYTHON IGNORES
