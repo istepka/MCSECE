@@ -5,7 +5,8 @@
 # src/modules/
 src/modules/backup/*
 src/modules/*.zip
-src/models/cfec/*
+src/modules/*
+src/models/*
 CARLA/*
 .vscode/
 archive.ics.*
