@@ -5,7 +5,6 @@
 # src/modules/
 src/modules/backup/*
 src/modules/*.zip
-src/modules/*
 src/models/*
 CARLA/*
 .vscode/
