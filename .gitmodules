@@ -1,0 +1,6 @@
+[submodule "src/modules/CARLA"]
+	path = src/modules/CARLA
+	url = https://github.com/Iggyyy/CARLA
+[submodule "src/modules/CFEC"]
+	path = src/modules/CFEC
+	url = https://github.com/Iggyyy/CFEC
