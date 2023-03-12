@@ -42,6 +42,7 @@ HYPERPARAMETERS['MODEL_PATH'] = f'models/{HYPERPARAMETERS["DATASET_NAME"]}_NN/'
 HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND'] = 'tensorflow'
 
 HYPERPARAMETERS['SAVE_PATH_SCORES'] = f"experiments/{date}/scores/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
+HYPERPARAMETERS['SAVE_PATH_VALID_SCORES'] = f"experiments/{date}/valid_scores/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
 HYPERPARAMETERS['SAVE_PATH_STATS'] = f"experiments/{date}/stats/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.json"
 HYPERPARAMETERS['SAVE_PATH_COUNTERFACTUALS'] = f"experiments/{date}/counterfactuals/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
 HYPERPARAMETERS['SAVE_PATH_VALID_COUNTERFACTUALS'] = f"experiments/{date}/valid_counterfactuals/{HYPERPARAMETERS['DATASET_NAME']}_{HYPERPARAMETERS['EXPLAINED_MODEL_BACKEND']}_i{HYPERPARAMETERS['INDEX_TO_EXPLAIN']}_{date}.csv"
@@ -57,6 +58,7 @@ if __name__ == '__main__':
     #PREPARE EXPERIMENT DIRECTORY
     if not os.path.exists(f'experiments/{date}'):
         os.makedirs(f'experiments/{date}/scores')
+        os.makedirs(f'experiments/{date}/valid_scores')
         os.makedirs(f'experiments/{date}/stats')
         os.makedirs(f'experiments/{date}/counterfactuals')
         os.makedirs(f'experiments/{date}/valid_counterfactuals')
@@ -171,10 +173,25 @@ if __name__ == '__main__':
         k_neighbors_feasib=HYPERPARAMETERS['K_NEIGHBORS_FEASIB'], 
         k_neighbors_discriminative=HYPERPARAMETERS['K_NEIGHBORS_DISCRIMINATIVE']
         ).reset_index(drop=True)
-
+    
+    scores_valid = get_scores(
+        cfs=valid_cfs.drop(columns=[target_feature_name, 'explainer']).to_numpy().astype('<U11'), 
+        cf_predicted_classes=valid_cfs[target_feature_name].to_numpy(),
+        training_data=train_dataset.drop(columns=target_feature_name).to_numpy().astype('<U11'),
+        training_data_predicted_classes=train_preds,
+        x = query_instance.to_numpy()[0].astype('<U11'),
+        x_predicted_class= test_dataset[HYPERPARAMETERS['INDEX_TO_EXPLAIN']:HYPERPARAMETERS['INDEX_TO_EXPLAIN'] + 1][target_feature_name],
+        continous_indices=continous_indices,
+        categorical_indices=categorical_indices,
+        preferences_ranking=HYPERPARAMETERS['PREFERENCES_RANKING'],
+        k_neighbors_feasib=HYPERPARAMETERS['K_NEIGHBORS_FEASIB'], 
+        k_neighbors_discriminative=HYPERPARAMETERS['K_NEIGHBORS_DISCRIMINATIVE']
+        ).reset_index(drop=True)
+    
     print(cfs['explainer'])
     scores['explainer'] = cfs['explainer']
-    print(scores['explainer'])
+    scores_valid['explainer'] = valid_cfs['explainer']
+    #print(scores['explainer'])
 
 
     stats = enseble.get_quantitative_stats()
@@ -209,6 +226,7 @@ if __name__ == '__main__':
         json.dump(stats_and_hypers_dic, f, indent=1)
 
     scores.to_csv(HYPERPARAMETERS['SAVE_PATH_SCORES'], index=False)
+    scores_valid.to_csv(HYPERPARAMETERS['SAVE_PATH_VALID_SCORES'], index=False)
     cfs.to_csv(HYPERPARAMETERS['SAVE_PATH_COUNTERFACTUALS'], index=False)
     valid_cfs.to_csv(HYPERPARAMETERS['SAVE_PATH_VALID_COUNTERFACTUALS'], index=False)
 
