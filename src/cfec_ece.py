@@ -102,7 +102,7 @@ class CfecEceModel:
         ]
         
 
-    def fit(self, fimap_load_string: str, models_subdirectory: str = 'src\\models\\cfec') -> None:
+    def fit(self, fimap_load_string: str, models_subdirectory: str = 'src/models/cfec') -> None:
         '''
         Fit the CFEC Fimap model and build final ECE.
 
@@ -117,8 +117,8 @@ class CfecEceModel:
             cwd = os.getcwd()
 
             # Check if directory exists
-            filepath_s = os.path.join(cwd, f'{models_subdirectory}\\s_{tmp[0]}_{tau}_{l1}_{l2}_{tmp[1]}')
-            filepath_g = os.path.join(cwd, f'{models_subdirectory}\\g_{tmp[0]}_{tau}_{l1}_{l2}_{tmp[1]}.h5')
+            filepath_s = os.path.join(cwd, f'{models_subdirectory}/s_{tmp[0]}_{tau}_{l1}_{l2}_{tmp[1]}')
+            filepath_g = os.path.join(cwd, f'{models_subdirectory}/g_{tmp[0]}_{tau}_{l1}_{l2}_{tmp[1]}.h5')
 
 
             if os.path.exists(filepath_g) and os.path.exists(filepath_s):

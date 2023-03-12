@@ -239,7 +239,7 @@ class Ensemble:
             cadex_max_epochs=50
         )
 
-    def __fit_cfec_ece(self, fimap_load_models_date: str = '2023-01-26') -> None:
+    def __fit_cfec_ece(self, fimap_load_models_date: str = '2023-03-11') -> None:
         self.cfec_model.fit(
             fimap_load_string=f'{self.dataset_shortname}_{self.model_backend_name}|{fimap_load_models_date}'
             )
