@@ -55,15 +55,14 @@ def train_model(dataset_shortname: str, seed: int = 44) -> None:
 
     model = tf.keras.Sequential()
     model.add(tf.keras.layers.Input((constr['features_count_split_without_target'],)))
-    model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(128))
     model.add(tf.keras.layers.ReLU())
     model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Dense(128))
-    model.add(tf.keras.layers.ReLU())
-    model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Dense(128))
-    model.add(tf.keras.layers.ReLU())
+    model.add(tf.keras.layers.Dense(64))
+    # model.add(tf.keras.layers.ReLU())
+    # model.add(tf.keras.layers.Dropout(0.2))
+    # model.add(tf.keras.layers.Dense(128))
+    # model.add(tf.keras.layers.ReLU())
     model.add(tf.keras.layers.Dense(2))
     model.add(tf.keras.layers.Softmax())
 
@@ -80,8 +79,8 @@ def train_model(dataset_shortname: str, seed: int = 44) -> None:
         model.fit(
             X_train, 
             Y_train,
-            epochs=200,
-            batch_size=64,
+            epochs=50,
+            batch_size=1024,
             validation_data=(X_test, Y_test),
             shuffle=True,
             callbacks=[
@@ -108,4 +107,4 @@ def train_model(dataset_shortname: str, seed: int = 44) -> None:
     print(f'Models saved to "models/{dataset_shortname}_NN"')
 
 if __name__ == '__main__':
-    train_model('german')
+    train_model('adult')
