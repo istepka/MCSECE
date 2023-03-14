@@ -17,7 +17,7 @@ from pareto import get_pareto_optimal_mask
 
 parser = argparse.ArgumentParser(description="Just an example",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument("dataset", help="Dataset name", choices={"adult", "german"})
+parser.add_argument("dataset", help="Dataset name", choices={"adult", "german", "fico", "compas"})
 parser.add_argument("index", help="Test data index to explain")
 args = parser.parse_args()
 config = vars(args)

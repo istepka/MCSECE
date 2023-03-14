@@ -144,12 +144,8 @@ def generate_dataset_files_and_config(
     print(test_ohe_df.info())
 
 
-
-
-
-if __name__ == '__main__':
+def german():
     # GERMAN
-
     raw_df = pd.read_csv('data/german.csv')
     categorical_columns = [
         'checking_status', 'credit_history', 'purpose', 
@@ -191,3 +187,81 @@ if __name__ == '__main__':
     )
 
     print(raw_df[target_column].value_counts())
+
+def fico():
+    
+    raw_df = pd.read_csv('data/fico.csv')
+    categorical_columns = []
+    continuous_columns = raw_df.columns.tolist()
+    continuous_columns.remove('RiskPerformance')
+    target_column = 'RiskPerformance'
+    
+    freeze_columns = ['ExternalRiskEstimate']
+    feature_ranges = {
+        'PercentTradesNeverDelq': [0, 100],
+        'PercentInstallTrades': [0, 100],
+        'PrecentageTradesWBalance': [0, 100],
+    }
+    monotonic_increase_columns = []
+    monotonic_decrease_columns = []
+    
+    # In fico dataset negative values mean that the value is missing
+    mask_negative = ~np.any(raw_df[continuous_columns] < 0, axis=1)
+    raw_df = raw_df[mask_negative]
+    
+    generate_dataset_files_and_config(
+        dataset_name='fico',
+        data=raw_df,
+        categorical_columns=categorical_columns,
+        continuous_columns=continuous_columns,
+        target_column=target_column,
+        monotonic_increasing_columns=monotonic_increase_columns,
+        monotonic_decreasing_columns=monotonic_decrease_columns,
+        freeze_columns=freeze_columns,
+        feature_ranges=feature_ranges,
+        test_size_per_class=125 # ~2500 instances -> 10% test size -> 5% per class = 125
+    )
+
+def compas():
+    raw_df = pd.read_csv('https://github.com/propublica/compas-analysis/raw/master/compas-scores-two-years.csv')
+    raw_df = raw_df[raw_df['type_of_assessment'] == 'Risk of Recidivism']
+
+    features = [
+        'sex', 'age', 'race', 'juv_fel_count', 
+        'decile_score', 'juv_misd_count', 'juv_other_count', 
+        'priors_count', 'c_days_from_compas', 'c_charge_degree',
+        'two_year_recid'
+        ]
+
+    categorical_columns = ['sex', 'race']
+    continuous_columns = ['age', 'juv_fel_count', 'decile_score', 'juv_misd_count', 'juv_other_count', 'priors_count', 'c_days_from_compas']
+    target_column = 'two_year_recid'
+    freeze_columns = ['age', 'sex', 'race', 'c_charge_degree']
+
+    feature_ranges = {
+        'age': [18, 100],
+        'decile_score': [0, 10],
+    }
+
+    raw_df = raw_df[features]
+    raw_df = raw_df.dropna(how='any', axis=0)
+    
+    generate_dataset_files_and_config(
+        dataset_name='compas',
+        data=raw_df,
+        categorical_columns=categorical_columns,
+        continuous_columns=continuous_columns,
+        target_column=target_column,
+        monotonic_increasing_columns=[],
+        monotonic_decreasing_columns=[],
+        freeze_columns=freeze_columns,
+        feature_ranges=feature_ranges,
+        test_size_per_class=125 # ~7200 instances -> 10% test size -> 5% per class = 125
+    )
+
+
+if __name__ == '__main__':
+    
+    #german()
+    #fico()
+    compas()

@@ -2,19 +2,27 @@ import tensorflow as tf
 import numpy as np
 import pandas as pd
 import json
-from tensorflow import keras
-from dataset_transform import imbalance_aware_split
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import MinMaxScaler
+from typing import List
+
+from dataset_transform import imbalance_aware_split
 
 print(str(tf.config.list_physical_devices()))
 tf.config.run_functions_eagerly(True)
 
 
-def train_model(dataset_shortname: str, seed: int = 44) -> None:
+def train_model(dataset_shortname: str, 
+                seed: int = 44, 
+                test_size_per_class: int = 100,
+                layers: List[int] = [128, 64],
+                ) -> None:
     '''
+    `dataset_shortname`: shortname for dataset e.g. 'adult', 'fico', 'german'
+    `seed`: seed for random number generator
+    `test_size_per_class`: number of instances that each class should have in the test set
     '''
     seed = 44
     tf.random.set_seed(seed)
@@ -32,7 +40,7 @@ def train_model(dataset_shortname: str, seed: int = 44) -> None:
     train, test = imbalance_aware_split(
         dataset[constr['features_order_after_split'] + [target_feature_col]], 
         target_feature_col=constr['target_feature'], 
-        test_size_per_class=100,
+        test_size_per_class=test_size_per_class,
         )
 
     X_train = train.drop([target_feature_col], axis=1)
@@ -55,14 +63,11 @@ def train_model(dataset_shortname: str, seed: int = 44) -> None:
 
     model = tf.keras.Sequential()
     model.add(tf.keras.layers.Input((constr['features_count_split_without_target'],)))
-    model.add(tf.keras.layers.Dense(128))
-    model.add(tf.keras.layers.ReLU())
-    model.add(tf.keras.layers.Dropout(0.2))
-    model.add(tf.keras.layers.Dense(64))
-    # model.add(tf.keras.layers.ReLU())
-    # model.add(tf.keras.layers.Dropout(0.2))
-    # model.add(tf.keras.layers.Dense(128))
-    # model.add(tf.keras.layers.ReLU())
+    
+    for layer_neurons in layers:
+        model.add(tf.keras.layers.Dense(layer_neurons))
+        model.add(tf.keras.layers.ReLU())
+        model.add(tf.keras.layers.Dropout(0.2))
     model.add(tf.keras.layers.Dense(2))
     model.add(tf.keras.layers.Softmax())
 
@@ -80,11 +85,11 @@ def train_model(dataset_shortname: str, seed: int = 44) -> None:
             X_train, 
             Y_train,
             epochs=50,
-            batch_size=1024,
+            batch_size=512,
             validation_data=(X_test, Y_test),
             shuffle=True,
             callbacks=[
-                tf.keras.callbacks.EarlyStopping(patience=20)
+                tf.keras.callbacks.EarlyStopping(patience=10)
             ],
             verbose=1,
             class_weight=tf_class_weights
@@ -107,4 +112,7 @@ def train_model(dataset_shortname: str, seed: int = 44) -> None:
     print(f'Models saved to "models/{dataset_shortname}_NN"')
 
 if __name__ == '__main__':
-    train_model('adult')
+    #train_model('german', test_size_per_class=100, layers=[128, 64]])
+    #train_model('adult', test_size_per_class=500, layers=[128, 64])
+    #train_model('fico', test_size_per_class=200, layers=[32, 16])
+    train_model('compas', test_size_per_class=300, layers=[64, 32])

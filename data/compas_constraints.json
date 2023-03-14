@@ -1,0 +1,112 @@
+{
+  "dataset_shortname": "compas",
+  "features_order_nonsplit": [
+    "age",
+    "juv_fel_count",
+    "decile_score",
+    "juv_misd_count",
+    "juv_other_count",
+    "priors_count",
+    "c_days_from_compas",
+    "sex",
+    "race",
+    "two_year_recid"
+  ],
+  "categorical_features_nonsplit": [
+    "sex",
+    "race"
+  ],
+  "continuous_features_nonsplit": [
+    "age",
+    "juv_fel_count",
+    "decile_score",
+    "juv_misd_count",
+    "juv_other_count",
+    "priors_count",
+    "c_days_from_compas"
+  ],
+  "target_feature": "two_year_recid",
+  "features_count_split_without_target": 15,
+  "non_actionable_features": [
+    "age",
+    "sex",
+    "race",
+    "c_charge_degree"
+  ],
+  "actionable_features": [
+    "juv_misd_count",
+    "c_days_from_compas",
+    "priors_count",
+    "juv_other_count",
+    "decile_score",
+    "juv_fel_count"
+  ],
+  "features_count_nonsplit": {
+    "age": 1,
+    "juv_fel_count": 1,
+    "decile_score": 1,
+    "juv_misd_count": 1,
+    "juv_other_count": 1,
+    "priors_count": 1,
+    "c_days_from_compas": 1,
+    "sex": 2,
+    "race": 6
+  },
+  "feature_first_occurrence_after_split": {
+    "age": 0,
+    "juv_fel_count": 1,
+    "decile_score": 2,
+    "juv_misd_count": 3,
+    "juv_other_count": 4,
+    "priors_count": 5,
+    "c_days_from_compas": 6,
+    "sex": 7,
+    "race": 9
+  },
+  "categorical_features_map_to_thier_splits": {
+    "sex": [
+      "sex_Female",
+      "sex_Male"
+    ],
+    "race": [
+      "race_African-American",
+      "race_Asian",
+      "race_Caucasian",
+      "race_Hispanic",
+      "race_Native American",
+      "race_Other"
+    ]
+  },
+  "features_monotonocity": {},
+  "feature_ranges": {
+    "age": [
+      18,
+      100
+    ],
+    "decile_score": [
+      0,
+      10
+    ]
+  },
+  "map_target_to_encoded": {
+    "0": 0,
+    "1": 1
+  },
+  "features_order_after_split": [
+    "age",
+    "juv_fel_count",
+    "decile_score",
+    "juv_misd_count",
+    "juv_other_count",
+    "priors_count",
+    "c_days_from_compas",
+    "sex_Female",
+    "sex_Male",
+    "race_African-American",
+    "race_Asian",
+    "race_Caucasian",
+    "race_Hispanic",
+    "race_Native American",
+    "race_Other"
+  ]
+}
