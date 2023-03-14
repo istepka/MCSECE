@@ -175,7 +175,10 @@ class CfecEceModel:
 
         # # Freeze non_actionable features
         for feature in non_actionable:
-            constraints.append(Freeze(categorical_features_map_to_thier_splits[feature])) # Append the split of the feature
+            if feature in categorical:
+                constraints.append(Freeze(categorical_features_map_to_thier_splits[feature])) # Append the split of the feature
+            else:
+                constraints.append(Freeze([feature]))
 
         # OneHot constraints
         for feature in categorical:
