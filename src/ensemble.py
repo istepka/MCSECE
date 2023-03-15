@@ -328,6 +328,8 @@ class Ensemble:
                         )
 
         cem_cfs = self.cem_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy(), verbose=False)
+        if cem_cfs is None or cem_cfs.PN is None:
+            return None
         cem_cfs_df_ohe_norm = pd.DataFrame(cem_cfs.PN, columns=self.features_order_after_split)
 
         cem_cfs_df = self.transform_from_norm_ohe(cem_cfs_df_ohe_norm)
