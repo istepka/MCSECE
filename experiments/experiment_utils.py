@@ -92,10 +92,10 @@ def get_ideal_point(data: npt.NDArray, optimization_direction: List[str], pareto
     return ideal_point
 
 
-def load_data(type: str, date: str, dataset_name: str) -> Tuple[List[pd.DataFrame], pd.DataFrame]:
+def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.DataFrame], pd.DataFrame]:
     """
     `type`: either **scores** or **counterfactuals**
-    `date`: date of the experiment in format yyyy-mm-dd
+    `dates`: date of the experiment in format yyyy-mm-dd
     `dataset_name`: name of the dataset e.g. adult
 
     return list of scores/cfs for each instance, all combined scores/cfs dataframe, list of instance indexes in test data
@@ -104,25 +104,28 @@ def load_data(type: str, date: str, dataset_name: str) -> Tuple[List[pd.DataFram
 
     idcs = []
     
-    if 'experiments' in os.getcwd():
-        directory = f'./{date}'
-    else:
-        directory = f'./experiments/{date}'
+    for date in dates:
+        if 'experiments' in os.getcwd():
+            directory = f'./{date}'
+        else:
+            directory = f'./experiments/{date}'
 
-    _, _, stats_filenames = os.walk(f'{directory}/{type}/').__next__()
-    for stat_filename in stats_filenames:
-        if dataset_name not in stat_filename:
-            continue 
+        _, _, stats_filenames = os.walk(f'{directory}/{type}/').__next__()
+        for stat_filename in stats_filenames:
+            if dataset_name not in stat_filename:
+                continue 
 
-        dataset_name, explained_model, index, date = stat_filename.split('_')
-        index = index[1:]
-        date = date[:-5]
-        #print(f'dataset: {dataset_name}, model: {explained_model}, index: {index}, date: {date}')
-        idcs.append(index)
-        with open(f'{directory}/{type}/' + stat_filename, 'r') as f:
-            df = pd.read_csv(f)
+            dataset_name, explained_model, index, date = stat_filename.split('_')
+            index = index[1:]
+            date = date[:-5]
+            #print(f'dataset: {dataset_name}, model: {explained_model}, index: {index}, date: {date}')
+            idcs.append(int(index))
+            with open(f'{directory}/{type}/' + stat_filename, 'r') as f:
+                df = pd.read_csv(f)
 
-        dfs.append(df)
+            dfs.append(df)
+    #print(idcs)      
+    print(list(set(range(0, 250)) - set(idcs)))
 
     _all = pd.concat(dfs)
     return dfs, _all, idcs
@@ -131,38 +134,38 @@ def load_data(type: str, date: str, dataset_name: str) -> Tuple[List[pd.DataFram
 
 if __name__ == '__main__':
     print(os.getcwd())
-    tscores, all, test_indices = load_data('scores', '2023-03-11', 'german')
+    tscores, all, test_indices = load_data('scores', ['2023-03-15', '2023-03-14', '2023-03-12'], 'fico')
     print(len(tscores))
     
-    for instance_scores in tscores:
-        iscores = instance_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
+    # for instance_scores in tscores:
+    #     iscores = instance_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
         
-        # Apply normalization in each feature
-        iscores = (iscores - iscores.min(axis=0)) / (iscores.max(axis=0) - iscores.min(axis=0))
+    #     # Apply normalization in each feature
+    #     iscores = (iscores - iscores.min(axis=0)) / (iscores.max(axis=0) - iscores.min(axis=0))
         
-        pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
-        ideal_point = get_ideal_point(iscores, ['min', 'min', 'max'], pareto_mask)
-        closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], pareto_mask, ideal_point, 'euclidean')
+    #     pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
+    #     ideal_point = get_ideal_point(iscores, ['min', 'min', 'max'], pareto_mask)
+    #     closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], pareto_mask, ideal_point, 'euclidean')
         
-        print(f'Closest idx: {closest_idx}')
-        print(f'Best counterfactual: {instance_scores.iloc[closest_idx]}')
+    #     print(f'Closest idx: {closest_idx}')
+    #     print(f'Best counterfactual: {instance_scores.iloc[closest_idx]}')
         
-        vis = np.concatenate([iscores, ideal_point.reshape(1, -1)], axis=0)
-        vis_df = pd.DataFrame(vis, columns=['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)'])
-        color = np.array(['dominated'] * vis_df.shape[0])
-        color[pareto_mask.astype(bool).tolist() + [False]] = 'pareto'
-        color[-1] = 'ideal'
-        color[closest_idx] = 'closest'
-        vis_df['type'] = color
+    #     vis = np.concatenate([iscores, ideal_point.reshape(1, -1)], axis=0)
+    #     vis_df = pd.DataFrame(vis, columns=['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)'])
+    #     color = np.array(['dominated'] * vis_df.shape[0])
+    #     color[pareto_mask.astype(bool).tolist() + [False]] = 'pareto'
+    #     color[-1] = 'ideal'
+    #     color[closest_idx] = 'closest'
+    #     vis_df['type'] = color
         
-        # Visualize using plotly express and pio in browser
-        import plotly.express as px
-        import plotly.io as pio
+    #     # Visualize using plotly express and pio in browser
+    #     import plotly.express as px
+    #     import plotly.io as pio
         
-        pio.renderers.default = "browser"
-        fig = px.scatter_3d(vis_df, x='Proximity', y='K_Feasibility(3)', z='DiscriminativePower(9)', color='type')
-        fig.show()
+    #     pio.renderers.default = "browser"
+    #     fig = px.scatter_3d(vis_df, x='Proximity', y='K_Feasibility(3)', z='DiscriminativePower(9)', color='type')
+    #     fig.show()
         
-        break
+    #     break
         
     
