@@ -193,10 +193,8 @@ if __name__ == '__main__':
     scores_valid['explainer'] = valid_cfs['explainer']
     #print(scores['explainer'])
 
-
     stats = enseble.get_quantitative_stats()
-
-
+    
     # GET PARETO OPTIMAL STATS
     metric = 'Proximity'
     other_metric = 'K_Feasibility(3)'
@@ -221,6 +219,7 @@ if __name__ == '__main__':
 
     # Join both dictionaries
     stats_and_hypers_dic = stats | HYPERPARAMETERS
+    stats_and_hypers_dic['ORIGINAL_X_CLASS'] = str(stats_and_hypers_dic['ORIGINAL_X_CLASS'])
 
     with open(HYPERPARAMETERS['SAVE_PATH_STATS'], 'w') as f:
         json.dump(stats_and_hypers_dic, f, indent=1)
