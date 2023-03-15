@@ -58,28 +58,28 @@
     "ExternalRiskEstimate"
   ],
   "actionable_features": [
-    "PercentTradesWBalance",
-    "NumTotalTrades",
-    "MSinceMostRecentTradeOpen",
-    "NumSatisfactoryTrades",
-    "NumInqLast6Mexcl7days",
-    "MSinceMostRecentDelq",
-    "NumRevolvingTradesWBalance",
-    "PercentTradesNeverDelq",
-    "MaxDelqEver",
-    "NetFractionRevolvingBurden",
-    "PercentInstallTrades",
-    "AverageMInFile",
-    "NumTrades90Ever2DerogPubRec",
-    "NumInstallTradesWBalance",
-    "MaxDelq2PublicRecLast12M",
-    "MSinceMostRecentInqexcl7days",
-    "NetFractionInstallBurden",
-    "NumInqLast6M",
     "MSinceOldestTradeOpen",
     "NumTradesOpeninLast12M",
+    "NumSatisfactoryTrades",
+    "MSinceMostRecentTradeOpen",
+    "NumBank2NatlTradesWHighUtilization",
+    "MaxDelqEver",
+    "PercentTradesNeverDelq",
+    "MaxDelq2PublicRecLast12M",
+    "NumRevolvingTradesWBalance",
+    "PercentTradesWBalance",
+    "NetFractionRevolvingBurden",
+    "NetFractionInstallBurden",
+    "MSinceMostRecentDelq",
+    "NumInstallTradesWBalance",
+    "NumInqLast6M",
+    "PercentInstallTrades",
+    "NumInqLast6Mexcl7days",
     "NumTrades60Ever2DerogPubRec",
-    "NumBank2NatlTradesWHighUtilization"
+    "MSinceMostRecentInqexcl7days",
+    "NumTrades90Ever2DerogPubRec",
+    "NumTotalTrades",
+    "AverageMInFile"
   ],
   "features_count_nonsplit": {
     "ExternalRiskEstimate": 1,
@@ -142,7 +142,7 @@
       0,
       100
     ],
-    "PrecentageTradesWBalance": [
+    "PercentTradesWBalance": [
       0,
       100
     ]

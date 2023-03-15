@@ -10,11 +10,13 @@
     "c_days_from_compas",
     "sex",
     "race",
+    "c_charge_degree",
     "two_year_recid"
   ],
   "categorical_features_nonsplit": [
     "sex",
-    "race"
+    "race",
+    "c_charge_degree"
   ],
   "continuous_features_nonsplit": [
     "age",
@@ -26,7 +28,7 @@
     "c_days_from_compas"
   ],
   "target_feature": "two_year_recid",
-  "features_count_split_without_target": 15,
+  "features_count_split_without_target": 17,
   "non_actionable_features": [
     "age",
     "sex",
@@ -35,11 +37,11 @@
   ],
   "actionable_features": [
     "juv_misd_count",
-    "c_days_from_compas",
-    "priors_count",
     "juv_other_count",
-    "decile_score",
-    "juv_fel_count"
+    "c_days_from_compas",
+    "juv_fel_count",
+    "priors_count",
+    "decile_score"
   ],
   "features_count_nonsplit": {
     "age": 1,
@@ -50,7 +52,8 @@
     "priors_count": 1,
     "c_days_from_compas": 1,
     "sex": 2,
-    "race": 6
+    "race": 6,
+    "c_charge_degree": 2
   },
   "feature_first_occurrence_after_split": {
     "age": 0,
@@ -61,7 +64,8 @@
     "priors_count": 5,
     "c_days_from_compas": 6,
     "sex": 7,
-    "race": 9
+    "race": 9,
+    "c_charge_degree": 15
   },
   "categorical_features_map_to_thier_splits": {
     "sex": [
@@ -75,6 +79,10 @@
       "race_Hispanic",
       "race_Native American",
       "race_Other"
+    ],
+    "c_charge_degree": [
+      "c_charge_degree_F",
+      "c_charge_degree_M"
     ]
   },
   "features_monotonocity": {},
@@ -107,6 +115,8 @@
     "race_Caucasian",
     "race_Hispanic",
     "race_Native American",
-    "race_Other"
+    "race_Other",
+    "c_charge_degree_F",
+    "c_charge_degree_M"
   ]
 }
