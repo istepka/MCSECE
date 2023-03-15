@@ -200,7 +200,7 @@ def fico():
     feature_ranges = {
         'PercentTradesNeverDelq': [0, 100],
         'PercentInstallTrades': [0, 100],
-        'PrecentageTradesWBalance': [0, 100],
+        'PercentTradesWBalance': [0, 100],
     }
     monotonic_increase_columns = []
     monotonic_decrease_columns = []
@@ -233,7 +233,7 @@ def compas():
         'two_year_recid'
         ]
 
-    categorical_columns = ['sex', 'race']
+    categorical_columns = ['sex', 'race', 'c_charge_degree']
     continuous_columns = ['age', 'juv_fel_count', 'decile_score', 'juv_misd_count', 'juv_other_count', 'priors_count', 'c_days_from_compas']
     target_column = 'two_year_recid'
     freeze_columns = ['age', 'sex', 'race', 'c_charge_degree']
