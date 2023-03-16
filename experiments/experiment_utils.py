@@ -124,18 +124,79 @@ def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.D
                 df = pd.read_csv(f)
 
             dfs.append(df)
-    #print(idcs)      
-    print(list(set(range(0, 250)) - set(idcs)))
 
     _all = pd.concat(dfs)
     return dfs, _all, idcs
 
 
+# pandas dataframe to latex table
+def pandas_to_latex(df: pd.DataFrame, keep_formatting: bool = True) -> str:
+    """Converts a pandas dataframe to a latex table.
+    Args:
+        df: The dataframe to convert.
+        keep_formatting: Whether to keep the formatting of the dataframe.
+    Returns:
+        The latex table as a string.
+    """
+    latex = df.to_latex()
+    # Replace \font-weightbold with proper latexbf formatting
+    latex = latex.replace(r"\font-weightbold", r"\bfseries")
+    # Insert \hline after each newline 
+    latex = latex.replace(r"\\", r"\\ \hline")
+    # Insert \hline at the top after first newline \n
+    latex = latex.replace(r"rrr}", r"rrr} \hline")
+    # Replace undersores with dashes
+    latex = latex.replace("_", "-")
+    # Insert bold line before ideal-point-eucli
+    latex = latex.replace("ideal-point-", r"\bfseries ideal-point-")
+    # Rename columns according to dictionary
+    shortnames = {
+        'proximity': 'prox',
+        'k-feasibility-3': 'feas-3',
+        'discriminative-power-9': 'discrpow-9',
+        'sparsity': 'spars',
+        'instability': 'plausib',
+        'coverage': 'cover',
+        'actionable': 'actionab',
+    }
+    uparrow = ['discrpow-9', 'actionab', 'cover']
+    for k, v in shortnames.items():
+        latex = latex.replace(f'{k} ', rf'{v} $\uparrow$' if v in uparrow else rf'{v} $\downarrow$')
+        
+    
+    
+    return latex
+
+def generate_latex_table(experiment_df: pd.DataFrame):
+    '''
+    Generate latex table from experiment dataframe
+    '''
+    
+    def _highlight_top3(s, max_metric = ['discriminative_power_9', 'coverage', 'actionable']):
+        #print(s)
+        if s.name in max_metric:
+            top = sorted(s, reverse=True)[:3]
+        else:
+            top = sorted(s)[:3]
+        return ['font-weight: bold' if v  in top else '' for v in s]
+
+    # bold top 3 in each metric
+    res = experiment_df.style.apply(_highlight_top3, axis=0)
+    # Round to 2 decimals
+    res = res.format(precision=2)
+    
+    latex = pandas_to_latex(res, keep_formatting=True)
+    return latex
+    
+
+
 
 if __name__ == '__main__':
-    print(os.getcwd())
-    tscores, all, test_indices = load_data('scores', ['2023-03-15', '2023-03-14', '2023-03-12'], 'fico')
-    print(len(tscores))
+    # print(os.getcwd())
+    # tscores, all, test_indices = load_data('scores', ['2023-03-15', '2023-03-14', '2023-03-12'], 'fico')
+    # print(len(tscores))
+    
+    print(generate_latex_table(pd.read_csv('experiments/results/experiment1_fico_valid.csv', index_col=0)))
     
     # for instance_scores in tscores:
     #     iscores = instance_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
