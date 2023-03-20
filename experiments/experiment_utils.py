@@ -11,11 +11,14 @@ def euclidean_distance(a, b):
 def chebyshev_distance(a, b):
     return np.max(np.abs(a - b))
 
+def manhattan_distance(a, b):
+    return np.sum(np.abs(a-b))
+
 def calculate_distance_to_ideal_point(data: npt.NDArray, ideal_point: npt.NDArray, distance_metric: str = 'euclidean') -> npt.NDArray:
     """
     `data`: scores to explore
     `ideal_point`: ideal point of the pareto optimal points
-    `distance_metric`: distance metric to use, either `euclidean` or `chebyshev`
+    `distance_metric`: distance metric to use, either `euclidean`, 'manhattan' or `chebyshev`
 
     return distance of each data point to the ideal point
     """
@@ -24,6 +27,8 @@ def calculate_distance_to_ideal_point(data: npt.NDArray, ideal_point: npt.NDArra
     for i, ins in enumerate(data):
         if distance_metric == 'chebyshev':
             distance[i] = chebyshev_distance(ins, ideal_point)
+        elif distance_metric == 'manhattan':
+            distance[i] = manhattan_distance(ins, ideal_point)
         else:
             distance[i] = euclidean_distance(ins, ideal_point)
 
@@ -40,7 +45,7 @@ def get_closest_to_optimal_point(data: npt.NDArray,
     `optimization direction`: list of ['max' and 'min'] of the data feature length
     `pareto_optimal_mask`: mask to the data with 1 in positions of pareto optimal datapoints
     `ideal_point`: ideal point of the pareto optimal points
-    `distance_metric`: distance metric to use, either `euclidean` or `chebyshev
+    `distance_metric`: distance metric to use, either `euclidean`, 'manhattan' or `chebyshev
     
     return index of the closest point to the ideal point
     """
@@ -109,7 +114,7 @@ def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.D
             directory = f'./{date}'
         else:
             directory = f'./experiments/{date}'
-
+    
         _, _, stats_filenames = os.walk(f'{directory}/{type}/').__next__()
         for stat_filename in stats_filenames:
             if dataset_name not in stat_filename:
@@ -187,9 +192,122 @@ def generate_latex_table(experiment_df: pd.DataFrame):
     
     latex = pandas_to_latex(res, keep_formatting=True)
     return latex
+
+
+def get_ranges(test_data: pd.DataFrame, constraints: dict) -> npt.NDArray:
+    '''
+    Get ranges for continous variables.
+    '''
+    mins = test_data[constraints['continuous_features_nonsplit']].to_numpy().min(axis=0)
+    maxes = test_data[constraints['continuous_features_nonsplit']].to_numpy().max(axis=0)
+    feature_ranges = maxes - mins
+    return feature_ranges
+
+
+def heom(x: npt.NDArray, y: npt.NDArray, 
+         ranges: npt.NDArray, continous_indices: npt.NDArray, 
+         categorical_indices: npt.NDArray) -> float:
+    '''
+    Calculate HEOM distance between x and y. 
+    X and Y should not be normalized. 
+    X should be (n, m) dimensional.
+    Y should be 1-D array.
+    Ranges is max-min on each continous variables (order matters). 
+    '''
+    distance = np.zeros(x.shape[0])
+
+    # Continous |x-y| / range
+    distance += np.sum(np.abs(x[:, continous_indices].astype('float64') 
+                              - y[continous_indices].astype('float64')) / ranges
+                       , axis=1)
+
+    # Categorical - overlap
+    distance += np.sum(~np.equal(x[:, categorical_indices], y[categorical_indices]), axis=1)
+
+    return distance
+
+def instability(test_data: pd.DataFrame, 
+                x_index: int, 
+                counterfactual: pd.DataFrame | pd.Series, 
+                list_of_counterfactuals_df: List[pd.DataFrame], 
+                ranges: npt.NDArray, 
+                continous_indices: npt.NDArray | List[float], 
+                categorical_indices: npt.NDArray | List[float]
+                ):
+    '''
+    Calculate instability of counterfactuals - distance to the closest
+    counterfactuals of the closest instance to original_x in test_data.
+    '''
+    # Find closest instance to original_x in test_data
+    n = len(test_data)
+    x = test_data.iloc[0:n+1].to_numpy()
+    y = test_data.iloc[x_index].to_numpy()
+
+    all_distances = heom(x, y, ranges, continous_indices, categorical_indices)
+    # find closest instance to original_x in test_data
+    sorting_indices = np.argsort(all_distances)
+    # we do not take 0 because it is the same instance as original_x
+    closest_index = np.array(list(zip(range(n), all_distances)))[sorting_indices][1][0].astype(int)
+    # counterfactuals of closest x' to x
+    closest_counterfactuals = list_of_counterfactuals_df[closest_index].to_numpy()
     
+    instability_score = np.min(heom(closest_counterfactuals, 
+                                    counterfactual.to_numpy(), 
+                                    ranges, 
+                                    continous_indices, 
+                                    categorical_indices))
+    return instability_score
 
+def sparsity(x_instance: npt.NDArray, 
+             cf_instance: npt.NDArray, 
+             continous_indices, 
+             categorical_indices
+             ) -> int:
+    '''
+    Get sparsity which is the number of features changed.
+    '''
+    _sparsity = 0
+    
+    # Continous
+    _sparsity += np.sum(~np.isclose(x_instance[continous_indices].astype('float64'), cf_instance[continous_indices].astype('float64'), atol=1e-05))
+    
+    # Categorical
+    _sparsity += np.sum(~np.equal(x_instance[categorical_indices].astype('str'), cf_instance[categorical_indices].astype('str')))
+    
+    return _sparsity
 
+def is_actionable(x_instance: npt.NDArray, 
+                  cf_instance: npt.NDArray, 
+                  continous_indices, 
+                  categorical_indices, 
+                  freeze_indices
+                  ) -> bool:
+    '''
+    Test if counterfactual is actionable.
+    '''
+    for freeze_index in freeze_indices:
+        if freeze_index in continous_indices \
+            and not np.isclose(x_instance[freeze_index:freeze_index+1].astype('float64'), cf_instance[freeze_index:freeze_index+1].astype('float64'), atol=1e-05):
+            return False
+        if freeze_index in categorical_indices \
+            and not np.equal(x_instance.astype('str')[freeze_index], cf_instance.astype('str')[freeze_index]):
+            return False
+    return True
+
+def get_actionable_indices(x_instance: pd.DataFrame | pd.Series, 
+                           cf_instances: pd.DataFrame, 
+                           continous_indices, 
+                           categorical_indices, 
+                           freeze_indices
+                           ) -> npt.NDArray:
+    '''
+    For a given instance, get indices of actionable counterfactuals among cf_instances.
+    '''
+    actionability = []
+    for _, _cf in cf_instances.iterrows():
+        actionability.append(is_actionable(x_instance.to_numpy(), _cf.to_numpy(), continous_indices, categorical_indices, freeze_indices))
+    return cf_instances[actionability].index
+    
 
 if __name__ == '__main__':
     # print(os.getcwd())
