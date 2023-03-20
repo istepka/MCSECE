@@ -1,4 +1,4 @@
-# Ensemble of Counterfactual Explainers with Multi-Objective Selection problem of Pareto optimal solution. 
+# Obtaining counterfactuals using Ensemble of Explainers with Dominance Relation
 
 
 ## 1. Installation
