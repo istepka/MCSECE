@@ -1,5 +1,6 @@
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 
 class ExplainerBase:
     '''
@@ -11,5 +12,5 @@ class ExplainerBase:
     def fit() -> None:
         pass
 
-    def get_counterfactuals(self, query_instance: npt.NDArray, predicted_class: int) -> npt.NDArray:
+    def get_counterfactuals(self) -> npt.NDArray | pd.DataFrame:
         pass
