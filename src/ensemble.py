@@ -10,6 +10,13 @@ from time import time
 from dice import DiceModel 
 from cfec_ece import CfecEceModel
 from utils.transformations import min_max_normalization, inverse_min_max_normalization, transform_to_sparse, inverse_transform_to_sparse
+from transform import Transformer
+
+# Hyperparameter for methods which we set to generate N explanations
+DESIRED_CF_COUNTS = {
+    'wachter': 10,
+    'dice': 20
+}
 
 class Ensemble:
 
@@ -28,8 +35,7 @@ class Ensemble:
             self.model_backend_name = 'tensorflow' 
         else:
             self.model_backend_name = 'sklearn'
-
-        # Column names on not-transformed data 
+            
         self.categorical_columns_names = constraints_config_dictionary['categorical_features_nonsplit']
         self.continuous_columns_names = constraints_config_dictionary['continuous_features_nonsplit']
         self.non_actionable_columns_names = constraints_config_dictionary['non_actionable_features']
@@ -44,7 +50,6 @@ class Ensemble:
         self.dataset_shortname = constraints_config_dictionary['dataset_shortname']
         self.map_target_feature_to_encoded = constraints_config_dictionary['map_target_to_encoded']
         
-
         self.train_dataset_pd[self.features_order_before_split]
 
         # All non ohe features in proper order, without target feature name
@@ -52,8 +57,6 @@ class Ensemble:
         self.all_features_without_target.remove(self.feature_name_to_predict)
         self.features_order_before_split_without_target = self.features_order_before_split.copy()
         self.features_order_before_split_without_target.remove(self.feature_name_to_predict)
-
-        
 
         # Map of feature names before ohe to feature names in ohe encoding
         self.categorical_features_map_to_thier_splits = constraints_config_dictionary['categorical_features_map_to_thier_splits']
@@ -68,7 +71,15 @@ class Ensemble:
             dtype='bool'
             )
         self.actionable_mask_ohe_indices = np.where(self.actionable_mask_ohe)[0].tolist()
-
+        
+        self.transformer = Transformer(
+            train_dataset=self.train_dataset_pd,
+            categorical_columns_names=self.categorical_columns_names,
+            continuous_columns_names=self.continuous_columns_names,
+            feature_name_to_predict=self.feature_name_to_predict,
+            features_order_after_split=self.features_order_after_split,
+        )
+        
         # Models definitions and init
         # dice
         self.dice_model: DiceModel
@@ -79,13 +90,12 @@ class Ensemble:
         self.__init_cfec_ece()
         self.__fit_cfec_ece()
 
-
-
         # Init empty properties for linter
         self.all_counterfactuals: pd.DataFrame
         self.valid_counterfactuals: pd.DataFrame
         self.valid_actionable_counterfactuals: pd.DataFrame
         self.exectution_times: Dict[str, int] = dict() 
+        
 
     def generate_counterfactuals(self, query_instance: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
         '''
@@ -141,9 +151,14 @@ class Ensemble:
         if 'alibi' in self.list_of_explainers:
             # generate Wachter
             timer = time()
-            wachter_cfs = self.__wachter_generate_counterfactuals(query_instace=query_instance, desired_class=desired_class)
+            wachter_cfs = self.__wachter_generate_counterfactuals(
+                query_instance=query_instance, 
+                desired_class=desired_class, 
+                total_cfs=DESIRED_CF_COUNTS['wachter'])
+            
             if wachter_cfs is None or len(wachter_cfs) == 0:
                 wachter_cfs = counterfactuals.copy()
+                
             wachter_cfs['explainer'] = 'wachter'
             to_concat.append(wachter_cfs)
             self.exectution_times['wachter'] = time() - timer
@@ -244,69 +259,43 @@ class Ensemble:
             fimap_load_string=f'{self.dataset_shortname}_{self.model_backend_name}|{fimap_load_models_date}'
             )
 
-    def __wachter_generate_counterfactuals(self, query_instace: pd.DataFrame, desired_class: int, total_cfs: int = 10) -> pd.DataFrame:
+    def __wachter_generate_counterfactuals(self, 
+                                           query_instance: pd.DataFrame, 
+                                           desired_class: int, 
+                                           total_cfs: int = 10
+                                           ) -> pd.DataFrame:
+        '''Generate counterfactuals for query instance'''
+
+        # Late import because of tensorflow version
+        from alibi_wachter import AlibiWachter
         
-        from alibi_impl import AlibiWachter
+        # Initialize model
+        tf.compat.v1.disable_eager_execution()
+        # load model specifically for Wachter because it does not support model loaded in eager mode ;(
+        if isinstance(self.model_to_explain, tf.keras.Model):
+            self.model_to_explain = tf.keras.models.load_model(self.model_path)
 
-        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instace)
-
+        query_shape = (1, self.train_dataset_ohe_normalized.shape[1])
+        non_actionable_indices = ~np.array(self.actionable_mask_ohe, dtype='bool')
+        
         # Freeze feature ranges on non-actionable features
         wachter_feature_ranges = (
             self.train_dataset_ohe_normalized.to_numpy().min(axis=0),
             self.train_dataset_ohe_normalized.to_numpy().max(axis=0),
         )
-        non_actionable_indices = ~np.array(self.actionable_mask_ohe, dtype='bool')
+        
+        query_instance_ohe_norm = self.transformer.transform_to_normalized_ohe(query_instance)
         wachter_feature_ranges[0][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
         wachter_feature_ranges[1][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
+    
 
-        query_shape = (1, self.train_dataset_ohe_normalized.shape[1])
-
-        # Initialize explainer
-        if self.model_backend_name == 'sklearn':
-            self.wachter_model = AlibiWachter(self.model_to_explain, query_shape, 
-                                        feature_ranges=wachter_feature_ranges, max_iter=100, max_lam_steps=10, 
-                                        lam_init=0.001, learning_rate_init=0.1, early_stop=50, tolerance=0.01, 
-                                        target_proba=0.6, target_class=desired_class
-                                        )
-        else:
-            tf.compat.v1.disable_eager_execution()
-            # load model specifically for Wachter because it does not support model loaded in eager mode ;(
-            if isinstance(self.model_to_explain, tf.keras.Model):
-                self.model_to_explain = tf.keras.models.load_model(self.model_path)
-
-            self.wachter_model = AlibiWachter(self.model_to_explain, query_shape, 
-                                        target_proba=0.52, feature_ranges=wachter_feature_ranges,
-                                        tolerance=0.01, target_class=desired_class
-                                        )
-
+        self.wachter_model = AlibiWachter(self.model_to_explain, query_shape, self.transformer,
+                                    target_proba=0.52, feature_ranges=wachter_feature_ranges,
+                                    tolerance=0.01, target_class=desired_class
+                                    )
+        
         # Generate
-        explanation = self.wachter_model.generate_counterfactuals(query_instance_ohe_norm)
-
-        # Get counterfactuals from the optimization process
-        wachter_counterfactuals = []
-        for _, lst in explanation['data']['all'].items():
-            if lst:
-                for cf in lst:
-                    wachter_counterfactuals.append(cf['X'])
-        
-        # If no counterfactuals found return none
-        if len(wachter_counterfactuals) == 0:
-            return None
-
-        # Reshape to (n, features)
-        wachter_counterfactuals = np.array(wachter_counterfactuals).reshape(-1, query_instance_ohe_norm.shape[1])
-        
-        # Get random sample from all cfs to get desired number 
-        _indices_to_take = np.random.permutation(wachter_counterfactuals.shape[0])[0:total_cfs-1]
-        wachter_counterfactuals = wachter_counterfactuals[_indices_to_take, :]
-
-        # Concat sample with the one counterfactual that wachter chose as best found
-        wachter_counterfactuals = np.concatenate([wachter_counterfactuals, explanation.cf['X']], axis=0)
-
-        # Transform to original dataframe format
-        wachter_counterfactuals_df_ohe_norm = pd.DataFrame(wachter_counterfactuals, columns=self.features_order_after_split)
-        wachter_counterfactuals_df = self.transform_from_norm_ohe(wachter_counterfactuals_df_ohe_norm)
-        wachter_counterfactuals_df['explainer'] = 'wachter'
+        wachter_counterfactuals_df = self.wachter_model.generate_counterfactuals(query_instance_ohe_norm, total_cfs=total_cfs)
 
         return wachter_counterfactuals_df
     
