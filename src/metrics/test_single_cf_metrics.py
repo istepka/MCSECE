@@ -1,4 +1,4 @@
-from metrics.single_cf_metrics import *
+from single_cf_metrics import *
 
 print('Test validity')
 print(validity(0, 0))

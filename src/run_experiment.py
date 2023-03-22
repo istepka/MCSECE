@@ -8,12 +8,15 @@ from datetime import datetime
 from time import time
 import argparse
 import os
- 
+import logging 
+
 from ensemble import Ensemble
 from utils.scores import get_scores
 from utils.transformations import min_max_normalization, transform_to_sparse
-from pareto import get_pareto_optimal_mask
+from utils.pareto import get_pareto_optimal_mask
 
+# Set logging
+logging.basicConfig(level=logging.DEBUG)
 
 parser = argparse.ArgumentParser(description="Just an example",
                                  formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -102,6 +105,7 @@ if __name__ == '__main__':
     enseble = Ensemble(
         train_dataset=train_dataset, constraints_config_dictionary=constr,
         model_to_explain=explained_model, model_path=HYPERPARAMETERS['MODEL_PATH'],
+        list_of_explainers= ['dice', 'cem', 'cfec', 'wachter', 'carla', 'cfproto'] 
         )
     ensemble_init_elapsed_time = time() - ensemble_init_elapsed_time
     HYPERPARAMETERS['ENSEMBLE_INIT_ELAPSED_TIME'] = ensemble_init_elapsed_time
