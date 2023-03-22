@@ -1,27 +1,27 @@
 
-from typing import List
+from typing import List, Tuple
 import pandas as pd
 import tensorflow as tf
-from modules.CARLA import carla
-from carla.recourse_methods import GrowingSpheres, ActionableRecourse, Face
-from carla.models.catalog import MLModelCatalog
-import warnings
-from carla.data.catalog import CsvCatalog
 import json
 from tqdm import tqdm
 import time
+import warnings
 
+from modules.CARLA import carla
+from carla.recourse_methods import GrowingSpheres, ActionableRecourse, Face
+from carla.models.catalog import MLModelCatalog
+from carla.data.catalog import CsvCatalog
 from models.tfmodel import TFModelAdult
+from utils.transform import Transformer
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
 
 class CarlaModels:
 
     def __init__(self, train_dataset: pd.DataFrame, explained_model: tf.keras.Model,
         continous_columns: List[str], categorical_columns: List[str], 
         nonactionable_columns: List[str], target_feature_name: str, 
-        columns_order_ohe: List[str],
+        columns_order_ohe: List[str], transformer: Transformer
     ) -> None:
 
 
@@ -29,7 +29,7 @@ class CarlaModels:
         self.categorical_columns = categorical_columns
         self.nonactionable_columns = nonactionable_columns
         self.target_feature_name = target_feature_name
-
+        self.transformer = transformer
         self.data_catalog = CsvCatalog(dataset=train_dataset,
                             continuous=self.continous_columns,
                             categorical=self.categorical_columns,
@@ -52,9 +52,11 @@ class CarlaModels:
 
     def generate_counterfactuals(self, query_instance: pd.DataFrame, 
         growing_spheres_restarts: int = 20, face_restarts: int = 10,
-        ) -> pd.DataFrame:
+        ) -> Tuple[pd.DataFrame, dict]:
         '''
         Growing spheres is fast so can have more restarts than face
+        
+        returns: pd.DataFrame with counterfactuals, dict with execution times and explainers used
         '''
         execution_times = dict()
         to_concat = list()
@@ -99,10 +101,13 @@ class CarlaModels:
             explainers_list.append('face')
         execution_times['face'] = time.time() - start
 
-
-        concatenated = pd.concat(to_concat, ignore_index=True).reset_index(drop=True)
-        #concatenated['explainer'] = explainers_list
-        return concatenated, explainers_list, execution_times
+        # Concatenate all counterfactuals and transform them back to original format
+        carla_cfs_ohe_norm = pd.concat(to_concat, ignore_index=True).reset_index(drop=True)
+        carla_cfs_ohe_norm = carla_cfs_ohe_norm.dropna()
+        carla_cfs = self.transformer.transform_from_norm_ohe(carla_cfs_ohe_norm)
+        carla_cfs['explainer'] = explainers_list
+        
+        return carla_cfs, execution_times
 
         
 

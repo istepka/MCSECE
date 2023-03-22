@@ -2,14 +2,12 @@ from typing import Dict, List
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
-import pickle
-from alibi.explainers import Counterfactual, CEM, CounterfactualProto
+from alibi.explainers import Counterfactual
 import tensorflow as tf
-from utils.transformations import transform_to_sparse, inverse_min_max_normalization, min_max_normalization
 from sklearn.ensemble import RandomForestClassifier
 
-from ExplainerBase import ExplainerBase
-from transform import Transformer
+from explainers.ExplainerBase import ExplainerBase
+from utils.transform import Transformer
 
 class AlibiWachter(ExplainerBase):
     def __init__(self, model: tf.keras.Model | RandomForestClassifier, query_instance_shape: npt.NDArray, 

@@ -5,12 +5,14 @@ import pandas as pd
 import tensorflow as tf
 from sklearn.ensemble import RandomForestClassifier
 from time import time
+import json 
+import warnings
+import logging
 
 # Own
-from dice import DiceModel 
-from cfec_ece import CfecEceModel
-from utils.transformations import min_max_normalization, inverse_min_max_normalization, transform_to_sparse, inverse_transform_to_sparse
-from transform import Transformer
+from explainers.dice import DiceModel 
+from explainers.cfec_ece import CfecEceModel
+from utils.transform import Transformer
 
 # Hyperparameter for methods which we set to generate N explanations
 DESIRED_CF_COUNTS = {
@@ -22,7 +24,7 @@ class Ensemble:
 
     def __init__(self, train_dataset: pd.DataFrame, constraints_config_dictionary: Dict,
         model_to_explain: tf.keras.Model | RandomForestClassifier, model_path: str,
-        list_of_explainers: List[str] = ['dice', 'cfec', 'alibi', 'carla'],
+        list_of_explainers: List[str] = ['dice', 'cfec', 'wachter', 'cem', 'cfproto', 'carla'],
     ) -> None:
         
         self.train_dataset_pd = train_dataset
@@ -60,9 +62,18 @@ class Ensemble:
 
         # Map of feature names before ohe to feature names in ohe encoding
         self.categorical_features_map_to_thier_splits = constraints_config_dictionary['categorical_features_map_to_thier_splits']
+        
+        # Initialize transformer for data transformations
+        self.transformer = Transformer(
+            train_dataset=self.train_dataset_pd,
+            categorical_columns_names=self.categorical_columns_names,
+            continuous_columns_names=self.continuous_columns_names,
+            feature_name_to_predict=self.feature_name_to_predict,
+            features_order_after_split=self.features_order_after_split,
+        )
 
         # Transform train data
-        self.train_dataset_ohe_normalized = self.transform_to_normalized_ohe(self.train_dataset_pd)
+        self.train_dataset_ohe_normalized = self.transformer.transform_to_normalized_ohe(self.train_dataset_pd)
 
         # Create mask for actionable features in one-hot-encoded form. 1 indicates actionable features
         self.actionable_mask_ohe = np.array([ 
@@ -72,23 +83,17 @@ class Ensemble:
             )
         self.actionable_mask_ohe_indices = np.where(self.actionable_mask_ohe)[0].tolist()
         
-        self.transformer = Transformer(
-            train_dataset=self.train_dataset_pd,
-            categorical_columns_names=self.categorical_columns_names,
-            continuous_columns_names=self.continuous_columns_names,
-            feature_name_to_predict=self.feature_name_to_predict,
-            features_order_after_split=self.features_order_after_split,
-        )
-        
         # Models definitions and init
-        # dice
-        self.dice_model: DiceModel
-        self.__init_dice()
+        if 'dice' in self.list_of_explainers:
+            # dice
+            self.dice_model: DiceModel
+            self.__init_dice()
 
         # cfec
-        self.cfec_model: CfecEceModel
-        self.__init_cfec_ece()
-        self.__fit_cfec_ece()
+        if 'cfec' in self.list_of_explainers:
+            self.cfec_model: CfecEceModel
+            self.__init_cfec_ece()
+            self.__fit_cfec_ece()
 
         # Init empty properties for linter
         self.all_counterfactuals: pd.DataFrame
@@ -110,12 +115,12 @@ class Ensemble:
 
         query_instance = query_instance[self.features_order_before_split_without_target]
 
-        query_instance_norm_ohe = self.transform_to_normalized_ohe(query_instance)
+        query_instance_norm_ohe = self.transformer.transform_to_normalized_ohe(query_instance)
 
         query_instance_class_int = int(np.argmax(self.model_to_explain.predict(query_instance_norm_ohe.to_numpy().astype("float64"))))
         desired_class = 1 - query_instance_class_int
-        print(f'X class: {query_instance_class_int}')
-        print(f'Desired cf class: {desired_class}')
+        logging.debug(f'X class: {query_instance_class_int}')
+        logging.debug(f'Desired cf class: {desired_class}')
 
         to_concat = list()
 
@@ -129,7 +134,7 @@ class Ensemble:
             else:
                 dice_cfs = counterfactuals.copy()
             self.exectution_times['dice'] = time() - timer
-            print(f'Dice generated: {dice_cfs.shape[0]}')
+            logging.debug(f'Dice generated: {dice_cfs.shape[0]}')
 
 
         if 'cfec' in self.list_of_explainers:
@@ -139,16 +144,16 @@ class Ensemble:
                 query_instance=query_instance_norm_ohe.iloc[0]
             )
             if cfec_cfs_norm_ohe is not None and len(cfec_cfs_norm_ohe) > 0:
-                cfec_cfs = self.transform_from_norm_ohe(cfec_cfs_norm_ohe)
+                cfec_cfs = self.transformer.transform_from_norm_ohe(cfec_cfs_norm_ohe)
                 cfec_cfs['explainer'] = cfec_explainers
                 to_concat.append(cfec_cfs)
             else:
                 cfec_cfs = counterfactuals.copy()
             self.exectution_times['cfec'] = time() - timer
-            print(f'CFEC generated: {cfec_cfs.shape[0]}')
+            logging.debug(f'CFEC generated: {cfec_cfs.shape[0]}')
 
 
-        if 'alibi' in self.list_of_explainers:
+        if 'wachter' in self.list_of_explainers:
             # generate Wachter
             timer = time()
             wachter_cfs = self.__wachter_generate_counterfactuals(
@@ -162,8 +167,9 @@ class Ensemble:
             wachter_cfs['explainer'] = 'wachter'
             to_concat.append(wachter_cfs)
             self.exectution_times['wachter'] = time() - timer
-            print(f'Wachter generated: {wachter_cfs.shape[0]}')
-
+            logging.debug(f'Wachter generated: {wachter_cfs.shape[0]}')
+            
+        if 'cem' in self.list_of_explainers:
             # generate CEM
             timer = time()
             cem_cfs = self.__cem_generate_counterfactuals(query_instance)
@@ -172,8 +178,9 @@ class Ensemble:
             cem_cfs['explainer'] = 'cem'
             to_concat.append(cem_cfs)
             self.exectution_times['cem'] = time() - timer
-            print(f'CEM generated: {cem_cfs.shape[0]}')
-
+            logging.debug(f'CEM generated: {cem_cfs.shape[0]}')
+            
+        if 'cfproto' in self.list_of_explainers:
             # generate CfProto
             timer = time()
             cfproto_cfs = self.__cfproto_generate_counterfactuals(query_instance)
@@ -182,7 +189,7 @@ class Ensemble:
             cfproto_cfs['explainer'] = 'cfproto'
             to_concat.append(cfproto_cfs)
             self.exectution_times['cfproto'] = time() - timer
-            print(f'CFPROTO cfproto: {cfproto_cfs.shape[0]}')
+            logging.debug(f'CFPROTO cfproto: {cfproto_cfs.shape[0]}')
 
         if 'carla' in self.list_of_explainers:
             # CARLA
@@ -190,13 +197,13 @@ class Ensemble:
             if carla_cfs is None or len(carla_cfs) == 0:
                 carla_cfs = counterfactuals.copy()
             to_concat.append(carla_cfs)
-            print(f'CARLA generated: {carla_cfs.shape[0]}') 
+            logging.debug(f'CARLA generated: {carla_cfs.shape[0]}') 
         
 
         # Combine all generated counterfactuals
         counterfactuals = pd.concat([counterfactuals] + to_concat, ignore_index=True)
 
-        print(counterfactuals['explainer'].tolist())
+        logging.debug(counterfactuals['explainer'].tolist())
 
         counterfactuals[self.feature_name_to_predict] = self.__get_prediction_class_to_counterfactuals(counterfactuals)
 
@@ -222,7 +229,7 @@ class Ensemble:
         for value, encoding in self.map_target_feature_to_encoded.items():
             train_df[self.feature_name_to_predict] = train_df[self.feature_name_to_predict].replace(value, encoding)
         
-        #print(train_df[self.feature_name_to_predict])
+        #logging.debug(train_df[self.feature_name_to_predict])
 
         self.dice_model = DiceModel(
             train_dataset=train_df,
@@ -267,11 +274,9 @@ class Ensemble:
         '''Generate counterfactuals for query instance'''
 
         # Late import because of tensorflow version
-        from alibi_wachter import AlibiWachter
-        
-        # Initialize model
+        from explainers.alibi_wachter import AlibiWachter
+        # load model specifically for alibi package methods because it does not support model loaded in eager mode ;(
         tf.compat.v1.disable_eager_execution()
-        # load model specifically for Wachter because it does not support model loaded in eager mode ;(
         if isinstance(self.model_to_explain, tf.keras.Model):
             self.model_to_explain = tf.keras.models.load_model(self.model_path)
 
@@ -299,99 +304,63 @@ class Ensemble:
 
         return wachter_counterfactuals_df
     
-    def __cem_generate_counterfactuals(self, query_instace: pd.DataFrame) -> None:
-        from alibi_impl import AlibiCEM
-
-        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instace)
-
+    def __cem_generate_counterfactuals(self, query_instance: pd.DataFrame) -> None:
+        from explainers.alibi_cem import AlibiCEM
+        # load model specifically for alibi package methods because it does not support model loaded in eager mode ;(
+        tf.compat.v1.disable_eager_execution()
+        if isinstance(self.model_to_explain, tf.keras.Model):
+            self.model_to_explain = tf.keras.models.load_model(self.model_path)
+            
         cem_feature_ranges = (
             self.train_dataset_ohe_normalized.to_numpy().min(axis=0),
             self.train_dataset_ohe_normalized.to_numpy().max(axis=0),
         )
         non_actionable_indices = ~np.array(self.actionable_mask_ohe, dtype='bool')
+        
+        query_instance_ohe_norm = self.transformer.transform_to_normalized_ohe(query_instance)
         cem_feature_ranges[0][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
         cem_feature_ranges[1][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
 
         self.cem_model = AlibiCEM(model=self.model_to_explain, train_data_ohe_norm=self.train_dataset_ohe_normalized.to_numpy(), 
-                        query_instance_shape=query_instance_ohe_norm.shape, feature_ranges=cem_feature_ranges,
+                        query_instance_shape=query_instance_ohe_norm.shape, feature_ranges=cem_feature_ranges, transformer=self.transformer
                         )
 
-        cem_cfs = self.cem_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy(), verbose=False)
-        if cem_cfs is None or cem_cfs.PN is None:
-            return None
-        cem_cfs_df_ohe_norm = pd.DataFrame(cem_cfs.PN, columns=self.features_order_after_split)
-
-        cem_cfs_df = self.transform_from_norm_ohe(cem_cfs_df_ohe_norm)
-        cem_cfs_df['explainer'] = 'cem'
+        cem_cfs_df = self.cem_model.generate_counterfactuals(query_instance, verbose=False)
 
         return cem_cfs_df
 
     def __cfproto_generate_counterfactuals(self, query_instance: pd.DataFrame, total_CFs: int = 10) -> None:
-        from alibi_impl import AlibiProto
-        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instance)
-
-        # cfprot_feature_ranges = (
-        #     self.train_dataset_ohe_normalized.to_numpy().min(axis=0),
-        #     self.train_dataset_ohe_normalized.to_numpy().max(axis=0),
-        # )
-        # non_actionable_indices = ~np.array(self.actionable_mask_ohe, dtype='bool')
-        # cfprot_feature_ranges[0][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
-        # cfprot_feature_ranges[1][non_actionable_indices] = query_instance_ohe_norm.to_numpy()[0][non_actionable_indices]
-        # cfprot_feature_ranges = (cfprot_feature_ranges[0].reshape(1,-1), cfprot_feature_ranges[1].reshape(1,-1))
-
-        frozen_indices = [query_instance.columns.tolist().index(feat) for feat in self.non_actionable_columns_names]
+        from explainers.alibi_proto import AlibiProto
+        # load model specifically for alibi package methods because it does not support model loaded in eager mode ;(
+        tf.compat.v1.disable_eager_execution()
+        if isinstance(self.model_to_explain, tf.keras.Model):
+            self.model_to_explain = tf.keras.models.load_model(self.model_path)
 
         ranges = (
             np.zeros(query_instance.shape),
             np.ones(query_instance.shape)
         )
-        # Freeze possible feature changes on frozen features
-        #ranges[1][:, frozen_indices] = 0
 
+        logging.debug(f'SHAPE: {self.transformer.transform_to_normalized_ohe(query_instance).shape}')
+        
         self.cfproto_model = AlibiProto(
                                 model=self.model_to_explain, 
-                                query_instance_shape=query_instance_ohe_norm.shape,
+                                query_instance_shape=self.transformer.transform_to_normalized_ohe(query_instance).shape,
                                 features_first_occurrence_indices=self.feature_first_occurrence_index_after_split, 
                                 feature_value_counts=self.feature_value_counts, 
                                 categorical_features_names=self.categorical_columns_names,
-                                feature_ranges=ranges
+                                feature_ranges=ranges, transformer=self.transformer,
                             )
 
         self.cfproto_model.fit(self.train_dataset_ohe_normalized.to_numpy())
 
-        explanation = self.cfproto_model.generate_counterfactuals(query_instance_ohe_norm.to_numpy())
-
-        # If no coutnterfactuals found
-        if explanation is None or len(explanation['data']['all']) == 0:
-            return None
-
-         # Get counterfactuals from the optimization process
-        cfproto_counterfactuals = []
-        for _, lst in explanation['data']['all'].items():
-            if lst:
-                for cf in lst:
-                    cfproto_counterfactuals.append(cf)
-
-        # Reshape to (n, features)
-        cfproto_counterfactuals = np.array(cfproto_counterfactuals).reshape(-1, query_instance_ohe_norm.shape[1])
-        
-        # Get random sample from all cfs to get desired number 
-        _indices_to_take = np.random.permutation(cfproto_counterfactuals.shape[0])[0:total_CFs-1]
-        cfproto_counterfactuals = cfproto_counterfactuals[_indices_to_take, :]
-
-        # Concat sample with the one counterfactual that wachter chose as best found
-        cfproto_counterfactuals = np.concatenate([cfproto_counterfactuals, explanation.cf['X']], axis=0)
-
-        cfproto_cfs_ohe_norm = pd.DataFrame(cfproto_counterfactuals, columns=self.features_order_after_split)
-
-        cfproto_cfs_df = self.transform_from_norm_ohe(cfproto_cfs_ohe_norm)
-        cfproto_cfs_df['explainer'] = 'cfproto'
+        cfproto_cfs_df = self.cfproto_model.generate_counterfactuals(query_instance, total_CFs=total_CFs)
 
         return cfproto_cfs_df
 
     def __carla_generate_counterfactuals(self, query_instance: pd.DataFrame) -> pd.DataFrame:
         
-        from carla_models import CarlaModels
+        from explainers.carla_models import CarlaModels
 
         # Reload model to avoid errors
         if isinstance(self.model_to_explain, tf.keras.Model):
@@ -407,62 +376,22 @@ class Ensemble:
             nonactionable_columns=self.non_actionable_columns_names,
             target_feature_name=self.feature_name_to_predict,
             columns_order_ohe=self.features_order_after_split,
+            transformer=self.transformer,
         )
 
-        carla_cfs_ohe_norm, explainers, execution_times_carla = self.carla_models.generate_counterfactuals(
+        carla_cfs, execution_times_carla = self.carla_models.generate_counterfactuals(
             query_instance=query_instance,
         )
 
         for _explainer, _time in execution_times_carla.items():
             self.exectution_times[_explainer] = _time
 
-        carla_cfs_ohe_norm['explainer'] = explainers
-        carla_cfs_ohe_norm = carla_cfs_ohe_norm.dropna()
-        explainers = carla_cfs_ohe_norm['explainer']
-
-        carla_cfs = self.transform_from_norm_ohe(carla_cfs_ohe_norm.drop(columns='explainer'))
-        carla_cfs['explainer'] = explainers
         return carla_cfs
-
-    # UTILITY FUNCTIONS 
-    def transform_to_normalized_ohe(self, query_instance: pd.DataFrame) -> pd.DataFrame:
-        '''Transform original dataframe into one-hot-encoded and normalized form.'''
-        query_instance_ohe = transform_to_sparse(
-            _df = query_instance,
-            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
-            categorical_features=self.categorical_columns_names,
-            continuous_features=self.continuous_columns_names
-        )
-
-        query_instance_ohe_norm = min_max_normalization(
-            _df=query_instance_ohe,
-            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
-            continuous_features=self.continuous_columns_names
-        )
-
-        return query_instance_ohe_norm[self.features_order_after_split] # Make sure that correct order is mantaineed
-
-    def transform_from_norm_ohe(self, query_instance_norm_ohe: pd.DataFrame) -> pd.DataFrame:
-        '''Transform from one-hot-encoded normalized form into original dataframe.'''
-        query_instance_ohe = inverse_min_max_normalization(
-            _df=query_instance_norm_ohe,
-            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
-            continuous_features=self.continuous_columns_names
-        )
-
-        query_instance = inverse_transform_to_sparse(
-            sparse_df=query_instance_ohe,
-            original_df=self.train_dataset_pd.drop(columns=self.feature_name_to_predict),
-            categorical_features=self.categorical_columns_names,
-            continuous_features=self.continuous_columns_names
-        )
-
-        return query_instance
 
     def __clip_to_ranges(self, counterfactuals: pd.DataFrame) -> pd.DataFrame:
         '''Clip values outside of the defined ranges'''
         for feature, (lower, upper) in self.feature_ranges.items():
-            #print(ranges)
+            #logging.debug(ranges)
            # lower, upper = ranges[0], ranges[1]
            counterfactuals.loc[counterfactuals[feature] < lower, feature] = lower
            counterfactuals.loc[counterfactuals[feature] > upper, feature] = upper
@@ -472,7 +401,7 @@ class Ensemble:
         '''
         Assign prediction class to counterfactuals.
         '''
-        cfs_norm_ohe = self.transform_to_normalized_ohe(counterfactuals).to_numpy().astype('float64')
+        cfs_norm_ohe = self.transformer.transform_to_normalized_ohe(counterfactuals).to_numpy().astype('float64')
 
         preds = np.argmax(self.model_to_explain.predict(cfs_norm_ohe), axis=1)
 
@@ -486,7 +415,7 @@ class Ensemble:
         assert all(pd.notna(counterfactuals[self.feature_name_to_predict])), 'All counterfactuals should have their predicted class assigned'
 
 
-        query_instance_ohe_norm = self.transform_to_normalized_ohe(query_instance).to_numpy().astype('float64')
+        query_instance_ohe_norm = self.transformer.transform_to_normalized_ohe(query_instance).to_numpy().astype('float64')
         query_class = np.argmax(self.model_to_explain.predict(query_instance_ohe_norm), axis=1)
 
         mask = counterfactuals[self.feature_name_to_predict].astype('int') != int(query_class)
@@ -553,16 +482,10 @@ class Ensemble:
 
 
 if __name__ == '__main__':
-    explained_model_backend = 'tensorflow' # 'sklearn' or 'tensorflow'
-
-
-    from sklearn.model_selection import train_test_split
-    import json
-    import warnings
-    import pickle
-
-    warnings.filterwarnings('ignore', category=UserWarning) #Ignore sklearn "RF fitted with FeatureNames"
-
+    
+    # Set logging
+    logging.basicConfig(level=logging.DEBUG)
+    
     train_dataset = pd.read_csv("data/adult.csv")
     dataset_name = 'adult'
     instance_to_explain_index = 5
@@ -570,37 +493,28 @@ if __name__ == '__main__':
     with open('data/adult_constraints.json', 'r') as f:
         constr = json.load(f)
     
-    if explained_model_backend == 'sklearn':
-        # SKLEARN
-        mod_path = 'models/adult_RF.pkl'
-        with open(mod_path, 'rb') as f:
-            explained_model = pickle.load(f)
-    else: 
-        # TENSORFLOW
-        mod_path = 'models/adult_NN/'
-        explained_model = tf.keras.models.load_model(mod_path)
-
+    # TENSORFLOW
+    mod_path = 'models/adult_NN/'
+    explained_model = tf.keras.models.load_model(mod_path)
 
     train_dataset = train_dataset[constr['features_order_nonsplit']]
     query_instance = train_dataset.drop(columns="income")[instance_to_explain_index:instance_to_explain_index+1]
 
-
-    enseble = Ensemble(
+    _ensemble = Ensemble(
         train_dataset=train_dataset, constraints_config_dictionary=constr,
         model_to_explain=explained_model, model_path=mod_path,
+        list_of_explainers=['cfproto'],
         )
 
-    cfs = enseble.generate_counterfactuals(query_instance)
+    cfs = _ensemble.generate_counterfactuals(query_instance)
 
-    print('----'*10)
-    print('ALL', enseble.get_all_counterfactuals())
-    print('----'*10)
-    print('VALID', enseble.get_valid_counterfactuals())
-    print('----'*10)
-    print('VALID ACT', enseble.get_valid_and_actionable_counterfactuals())
-    print('----'*10)
+    logging.debug('----'*10)
+    logging.debug('ALL', _ensemble.get_all_counterfactuals())
+    logging.debug('----'*10)
+    logging.debug('VALID', _ensemble.get_valid_counterfactuals())
+    logging.debug('----'*10)
+    logging.debug('VALID ACT', _ensemble.get_valid_and_actionable_counterfactuals())
+    logging.debug('----'*10)
 
-
-    # print(f'Query instance: {train_dataset["income"].iloc[instance_to_explain_index]}')
 
     

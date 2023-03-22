@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import json 
 import pickle
-import sklearn
 from sklearn.ensemble import RandomForestClassifier
 from dice_ml.model_interfaces.base_model import BaseModel
 from dice_ml.model import ModelTypes
