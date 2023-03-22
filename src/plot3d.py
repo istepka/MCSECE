@@ -1,6 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from pareto import get_pareto_optimal_mask
+from utils.pareto import get_pareto_optimal_mask
 import numpy as np
 
 explained_model_name = 'NN' # 'RF' / 'NN'
