@@ -55,22 +55,25 @@ class AlibiProto(ExplainerBase):
         if explanation is None or len(explanation['data']['all']) == 0:
             return None
 
-         # Get counterfactuals from the optimization process
-        cfproto_counterfactuals = []
-        for _, lst in explanation['data']['all'].items():
-            if lst:
-                for cf in lst:
-                    cfproto_counterfactuals.append(cf)
+        if total_CFs > 1:
+            # Get counterfactuals from the optimization process
+            cfproto_counterfactuals = []
+            for _, lst in explanation['data']['all'].items():
+                if lst:
+                    for cf in lst:
+                        cfproto_counterfactuals.append(cf)
 
-        # Reshape to (n, features)
-        cfproto_counterfactuals = np.array(cfproto_counterfactuals).reshape(-1, query_instance_ohe_norm.shape[1])
-        
-        # Get random sample from all cfs to get desired number 
-        _indices_to_take = np.random.permutation(cfproto_counterfactuals.shape[0])[0:total_CFs-1]
-        cfproto_counterfactuals = cfproto_counterfactuals[_indices_to_take, :]
+            # Reshape to (n, features)
+            cfproto_counterfactuals = np.array(cfproto_counterfactuals).reshape(-1, query_instance_ohe_norm.shape[1])
+            
+            # Get random sample from all cfs to get desired number 
+            _indices_to_take = np.random.permutation(cfproto_counterfactuals.shape[0])[0:total_CFs-1]
+            cfproto_counterfactuals = cfproto_counterfactuals[_indices_to_take, :]
 
-        # Concat sample with the one counterfactual that wachter chose as best found
-        cfproto_counterfactuals = np.concatenate([cfproto_counterfactuals, explanation.cf['X']], axis=0)
+            # Concat sample with the one counterfactual that wachter chose as best found
+            cfproto_counterfactuals = np.concatenate([cfproto_counterfactuals, explanation.cf['X']], axis=0)
+        else:
+            cfproto_counterfactuals = explanation.cf['X']
 
         cfproto_cfs_ohe_norm = pd.DataFrame(cfproto_counterfactuals, columns=self.transformer.features_order_after_split)
 
