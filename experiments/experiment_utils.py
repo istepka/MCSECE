@@ -135,7 +135,12 @@ def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.D
 
 
 # pandas dataframe to latex table
-def pandas_to_latex(df: pd.DataFrame, keep_formatting: bool = True) -> str:
+def pandas_to_latex(df: pd.DataFrame, 
+                    keep_formatting: bool = True, 
+                    save_file: bool = False, 
+                    save_dir: str = 'experiments',
+                    save_name: str = 'table.txt',
+                    ) -> str:
     """Converts a pandas dataframe to a latex table.
     Args:
         df: The dataframe to convert.
@@ -167,8 +172,11 @@ def pandas_to_latex(df: pd.DataFrame, keep_formatting: bool = True) -> str:
     uparrow = ['discrpow-9', 'actionab', 'cover']
     for k, v in shortnames.items():
         latex = latex.replace(f'{k} ', rf'{v} $\uparrow$' if v in uparrow else rf'{v} $\downarrow$')
-        
     
+    if save_file:
+        save_path = os.path.join(save_dir, save_name)
+        with open(save_path, 'w') as f:
+            f.write(latex)
     
     return latex
 

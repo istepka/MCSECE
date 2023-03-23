@@ -15,6 +15,7 @@ import plotly.io as pio
     
 from experiment_utils import *
 from visualization_utils import *
+from quick_rename import rename_explainers
 
 
 pio.renderers.default = "browser"
@@ -23,14 +24,16 @@ pio.renderers.default = "browser"
 if 'experiments' not in os.getcwd():
     os.chdir('experiments')
 
-RESOLUTION = 5
+RESOLUTION = 12
 PLOT_METRICS = ['DiscriminativePower(9)', 'K_Feasibility(3)', 'Proximity']
 DATASETS = ['german', 'adult', 'compas', 'fico']
-DATES = ['2023-03-12'] # This corresponds to folders containing countefactuals 
+DATES = ['2023-03-12', '2023-03-14', '2023-03-15'] # This corresponds to folders containing countefactuals 
+DATES_OTHER_METHODS = ['2023-03-22', '2023-03-23'] # This corresponds to folders containing countefactuals from different run where dice-1, cfproto-1 and wchater-1 were generated
 ONLY_VALID_MODE = True
 RESULTS_DIR = 'tmp_results'
 RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR)
 ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice'] # Last 5 letters indicate distance metric
+SUPPLEMENT_METHODS = ['dice-1', 'cfproto-1', 'wachter-1'] # Last 2 letters indicate the number of counterfactuals generated
 
 
 # INITIALIZATION
@@ -59,6 +62,17 @@ for dataset in DATASETS:
     # Load valid_counterfactuals
     list_of_valid_counterfactuals_df , valid_counterfactuals_df_all, valid_cf_test_set_indices = load_data('valid_counterfactuals', DATES, dataset)
     logging.debug(f'Gathered valid_counterfactuals for {len(list_of_valid_counterfactuals_df)} instances')
+    
+    # Load supplement data of methods outside of our ensemble framework
+    sup_list_of_scores_df, sup_scores_df_all, sup_scores_test_set_indices = load_data('scores', DATES_OTHER_METHODS, dataset)
+    sup_list_of_scores_df, sup_scores_df_all = rename_explainers(sup_list_of_scores_df, sup_scores_df_all)
+    sup_list_of_valid_scores_df, sup_valid_scores_df_all, sup_valid_scores_test_set_indices = load_data('valid_scores', DATES_OTHER_METHODS, dataset)
+    sup_list_of_valid_scores_df, sup_valid_scores_df_all = rename_explainers(sup_list_of_valid_scores_df, sup_valid_scores_df_all)
+    sup_list_of_counterfactuals_df, sup_counterfactuals_df_all, sup_cf_test_set_indices = load_data('counterfactuals', DATES_OTHER_METHODS, dataset)
+    sup_list_of_counterfactuals_df, sup_counterfactuals_df_all = rename_explainers(sup_list_of_counterfactuals_df, sup_counterfactuals_df_all)
+    sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all, sup_valid_cf_test_set_indices = load_data('valid_counterfactuals', DATES_OTHER_METHODS, dataset)
+    sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all = rename_explainers(sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all)
+    logging.debug(f'Gathered supplement data for {len(sup_list_of_scores_df)} instances')
 
     # Load test data - original x instances
     if 'experiments' in os.getcwd():
@@ -92,7 +106,7 @@ for dataset in DATASETS:
 
         
     freeze_indices = [test_dataset.columns.get_loc(c) for c in constraints['non_actionable_features']]
-    all_explainer_names = counterfactuals_df_all['explainer'].unique().tolist() + ADDITIONAL_METHODS
+    all_explainer_names = counterfactuals_df_all['explainer'].unique().tolist() + ADDITIONAL_METHODS + SUPPLEMENT_METHODS
     experiment_scores = {
         'proximity': {k: [] for k in all_explainer_names},
         'k_feasibility_3': {k: [] for k in all_explainer_names},
@@ -122,7 +136,6 @@ for dataset in DATASETS:
             _i_scores = i_scores.copy(deep=True)
             
             if 'ideal_point' in explainer_name:
-                
                 # Filter counterfactuals to include only actionable
                 actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, continous_indices, categorical_indices, freeze_indices)
                 
@@ -135,16 +148,37 @@ for dataset in DATASETS:
                 # Apply normalization in each feature
                 iscores = (iscores - iscores.min(axis=0)) / (iscores.max(axis=0) - iscores.min(axis=0))
                 distance_metric = explainer_name[-5:]
+                #logging.debug(f'Using distance metric: {distance_metric}')
+                
+                if 'eucli' in distance_metric: distance_metric = 'euclidean'
+                if 'manha' in distance_metric: distance_metric = 'manhattan'
+                if 'cheby' in distance_metric: distance_metric = 'chebyshev'
                 
                 pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
                 ideal_point = get_ideal_point(iscores, ['min', 'min', 'max'], pareto_mask)
                 closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], pareto_mask, ideal_point, distance_metric)
                 _index = closest_idx
+                
             elif explainer_name == 'random_choice':
                 # Get random counterfactual from all counterfactuals
                 _index = np.random.permutation(_i_scores.index)[0]
+                
+            elif explainer_name in SUPPLEMENT_METHODS:
+                if ONLY_VALID_MODE:
+                    _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_valid_counterfactuals_df[i]]).reset_index(drop=True)
+                    _i_scores = pd.concat([_i_scores, sup_list_of_valid_scores_df[i]]).reset_index(drop=True)
+                else:
+                    _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_counterfactuals_df[i]]).reset_index(drop=True)
+                    _i_scores = pd.concat([_i_scores, sup_list_of_scores_df[i]]).reset_index(drop=True)
+                
+                if explainer_name not in _i_scores['explainer'].unique():
+                    continue
+                
+                _index = _i_scores[_i_counterfactuals['explainer'] == explainer_name].index[0]
+                
             elif explainer_name not in _i_scores['explainer'].unique():
                 continue
+            
             else:
                 # Get random counterfactual from particular explainer
                 _index = np.random.permutation(_i_scores[_i_counterfactuals['explainer'] == explainer_name].index)[0]
@@ -193,7 +227,13 @@ for dataset in DATASETS:
     else:
         experiment1_df.to_csv(experiment1_savepath + '.csv')
 
-    logging.debug(pandas_to_latex(experiment1_df, keep_formatting=True))
+    latex = pandas_to_latex(experiment1_df, 
+                            keep_formatting=True,
+                            save_dir=RESULTS_PATH,
+                            save_file=True,
+                            save_name=f'experiment1_{dataset}.tex',
+                            )
+    logging.debug(latex)
 
     combinations = [(i/RESOLUTION, (RESOLUTION-i-k)/RESOLUTION, k/RESOLUTION) for i in range(0,RESOLUTION+1) for k in range(0,RESOLUTION-i+1)]
 
