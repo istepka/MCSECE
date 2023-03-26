@@ -1,8 +1,9 @@
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import numpy as np
 import numpy.typing as npt
 from EasyMCDM.models.Pareto import Pareto
 import pandas as pd
+import json
 import os
 
 def euclidean_distance(a, b):
@@ -134,6 +135,45 @@ def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.D
     return dfs, _all, idcs
 
 
+def load_stats(dates: List[str], dataset_name: str) -> Tuple[List[Dict], List]:
+    """
+    Load the stats for the instances of the experiment.
+    
+    `dates`: date of the experiment in format yyyy-mm-dd
+    `dataset_name`: name of the dataset e.g. adult
+    """
+    
+    stats_for_instances: List = [] 
+
+    idcs = []
+    for date in dates:
+        if 'experiments' in os.getcwd():
+            directory = f'{date}'
+        else:
+            directory = f'experiments/{date}'
+        
+        _dir = os.path.join(os.getcwd(), directory, 'stats')
+        print(_dir)
+    
+        _, _, stats_filenames = os.walk(_dir).__next__()
+        for stat_filename in stats_filenames:
+            if dataset_name not in stat_filename:
+                continue 
+
+            dataset_name, explained_model, index, date = stat_filename.split('_')
+            index = index[1:]
+            date = date[:-5]
+            #print(f'dataset: {dataset_name}, model: {explained_model}, index: {index}, date: {date}')
+            idcs.append(int(index))
+            with open(f'{directory}/stats/' + stat_filename, 'r') as f:
+                stats_dict = json.load(f)
+
+            stats_for_instances.append(stats_dict)
+    
+    print(f'Number of instances: {len(stats_for_instances)}')
+
+    return stats_for_instances, idcs
+
 # pandas dataframe to latex table
 def pandas_to_latex(df: pd.DataFrame, 
                     keep_formatting: bool = True, 
@@ -157,6 +197,8 @@ def pandas_to_latex(df: pd.DataFrame,
     latex = latex.replace(r"rrr}", r"rrr} \hline")
     # Replace undersores with dashes
     latex = latex.replace("_", "-")
+    # Replace backslash dash "\-" with dash "-"
+    latex = latex.replace(r"\-", "-")
     # Insert bold line before ideal-point-eucli
     latex = latex.replace("ideal-point-", r"\bfseries ideal-point-")
     # Rename columns according to dictionary
@@ -165,7 +207,7 @@ def pandas_to_latex(df: pd.DataFrame,
         'k-feasibility-3': 'feas-3',
         'discriminative-power-9': 'discrpow-9',
         'sparsity': 'spars',
-        'instability': 'plausib',
+        'instability': 'instab',
         'coverage': 'cover',
         'actionable': 'actionab',
     }
@@ -180,7 +222,7 @@ def pandas_to_latex(df: pd.DataFrame,
     
     return latex
 
-def generate_latex_table(experiment_df: pd.DataFrame):
+def generate_latex_table(experiment_df: pd.DataFrame) -> Tuple[str, pd.DataFrame]:
     '''
     Generate latex table from experiment dataframe
     '''
@@ -199,7 +241,7 @@ def generate_latex_table(experiment_df: pd.DataFrame):
     res = res.format(precision=2)
     
     latex = pandas_to_latex(res, keep_formatting=True)
-    return latex
+    return latex, res
 
 
 def get_ranges(test_data: pd.DataFrame, constraints: dict) -> npt.NDArray:

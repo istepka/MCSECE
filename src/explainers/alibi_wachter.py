@@ -59,7 +59,9 @@ class AlibiWachter(ExplainerBase):
             explanation = self.cf.explain(query_instance_ohe_norm.to_numpy())
         else:
             explanation = self.cf.explain(query_instance_ohe_norm)
-            
+        
+        if explanation is None or explanation.cf is None:
+            return None
             
         wachter_counterfactuals = []
         

@@ -20,20 +20,27 @@ from quick_rename import rename_explainers
 
 pio.renderers.default = "browser"
 
+# Seed for reproducibility
+np.random.seed(42)
+
 # Change cwd to experiments
 if 'experiments' not in os.getcwd():
     os.chdir('experiments')
 
-RESOLUTION = 12
+RESOLUTION = 15
 PLOT_METRICS = ['DiscriminativePower(9)', 'K_Feasibility(3)', 'Proximity']
 DATASETS = ['german', 'adult', 'compas', 'fico']
-DATES = ['2023-03-12', '2023-03-14', '2023-03-15'] # This corresponds to folders containing countefactuals 
-DATES_OTHER_METHODS = ['2023-03-22', '2023-03-23'] # This corresponds to folders containing countefactuals from different run where dice-1, cfproto-1 and wchater-1 were generated
+# This corresponds to folders containing countefactuals 
+DATES = ['2023-03-12', '2023-03-14', '2023-03-15'] 
+# This corresponds to folders containing countefactuals from different run where dice-1, cfproto-1 and wchater-1 were generated
+DATES_OTHER_METHODS = ['2023-03-22', '2023-03-23']
 ONLY_VALID_MODE = True
 RESULTS_DIR = 'tmp_results'
 RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR)
-ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice'] # Last 5 letters indicate distance metric
-SUPPLEMENT_METHODS = ['dice-1', 'cfproto-1', 'wachter-1'] # Last 2 letters indicate the number of counterfactuals generated
+# Last 5 letters indicate distance metric
+ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice'] 
+# Last 2 letters indicate the number of counterfactuals generated
+SUPPLEMENT_METHODS = ['dice-1', 'cfproto-1', 'wachter-1'] 
 
 
 # INITIALIZATION
@@ -66,10 +73,14 @@ for dataset in DATASETS:
     # Load supplement data of methods outside of our ensemble framework
     sup_list_of_scores_df, sup_scores_df_all, sup_scores_test_set_indices = load_data('scores', DATES_OTHER_METHODS, dataset)
     sup_list_of_scores_df, sup_scores_df_all = rename_explainers(sup_list_of_scores_df, sup_scores_df_all)
+    logging.debug(f'Gathered supplement data for {len(sup_list_of_scores_df)} instances')
+    logging.debug(f'Missing indices: {set(scores_test_set_indices) - set(sup_scores_test_set_indices)}')
     sup_list_of_valid_scores_df, sup_valid_scores_df_all, sup_valid_scores_test_set_indices = load_data('valid_scores', DATES_OTHER_METHODS, dataset)
     sup_list_of_valid_scores_df, sup_valid_scores_df_all = rename_explainers(sup_list_of_valid_scores_df, sup_valid_scores_df_all)
+    logging.debug(f'Gathered supplement data for {len(sup_list_of_scores_df)} instances')
     sup_list_of_counterfactuals_df, sup_counterfactuals_df_all, sup_cf_test_set_indices = load_data('counterfactuals', DATES_OTHER_METHODS, dataset)
     sup_list_of_counterfactuals_df, sup_counterfactuals_df_all = rename_explainers(sup_list_of_counterfactuals_df, sup_counterfactuals_df_all)
+    logging.debug(f'Gathered supplement data for {len(sup_list_of_scores_df)} instances')
     sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all, sup_valid_cf_test_set_indices = load_data('valid_counterfactuals', DATES_OTHER_METHODS, dataset)
     sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all = rename_explainers(sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all)
     logging.debug(f'Gathered supplement data for {len(sup_list_of_scores_df)} instances')
@@ -100,7 +111,9 @@ for dataset in DATASETS:
     logging.debug(f'Categorical indices: {categorical_indices}')
     logging.debug(f'Ranges: {ranges}')
 
-    test_plaus = instability(test_dataset, 0, list_of_counterfactuals_df[0].iloc[0], list_of_counterfactuals_df, ranges, continous_indices, categorical_indices)
+    test_plaus = instability(test_dataset, 0, list_of_counterfactuals_df[0].iloc[0], 
+                             list_of_counterfactuals_df, ranges, continous_indices, 
+                             categorical_indices)
     # Calculate example instability score
     logging.debug(f'Test instability: {test_plaus:.2f}')
 
@@ -137,7 +150,9 @@ for dataset in DATASETS:
             
             if 'ideal_point' in explainer_name:
                 # Filter counterfactuals to include only actionable
-                actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, continous_indices, categorical_indices, freeze_indices)
+                actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, 
+                                                            continous_indices, categorical_indices, 
+                                                            freeze_indices)
                 
                 _i_counterfactuals = _i_counterfactuals.iloc[actionable_indices]
                 _i_scores = _i_scores.iloc[actionable_indices]
@@ -156,7 +171,8 @@ for dataset in DATASETS:
                 
                 pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
                 ideal_point = get_ideal_point(iscores, ['min', 'min', 'max'], pareto_mask)
-                closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], pareto_mask, ideal_point, distance_metric)
+                closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], 
+                                                           pareto_mask, ideal_point, distance_metric)
                 _index = closest_idx
                 
             elif explainer_name == 'random_choice':
@@ -165,11 +181,15 @@ for dataset in DATASETS:
                 
             elif explainer_name in SUPPLEMENT_METHODS:
                 if ONLY_VALID_MODE:
-                    _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_valid_counterfactuals_df[i]]).reset_index(drop=True)
-                    _i_scores = pd.concat([_i_scores, sup_list_of_valid_scores_df[i]]).reset_index(drop=True)
+                    _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_valid_counterfactuals_df[i]], ignore_index=True) \
+                                            .reset_index(drop=True)
+                    _i_scores = pd.concat([_i_scores, sup_list_of_valid_scores_df[i]], ignore_index=True)\
+                                    .reset_index(drop=True)
                 else:
-                    _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_counterfactuals_df[i]]).reset_index(drop=True)
-                    _i_scores = pd.concat([_i_scores, sup_list_of_scores_df[i]]).reset_index(drop=True)
+                    _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_counterfactuals_df[i]], ignore_index=True) \
+                                            .reset_index(drop=True)
+                    _i_scores = pd.concat([_i_scores, sup_list_of_scores_df[i]], ignore_index=True) \
+                                    .reset_index(drop=True)
                 
                 if explainer_name not in _i_scores['explainer'].unique():
                     continue
@@ -184,7 +204,10 @@ for dataset in DATASETS:
                 _index = np.random.permutation(_i_scores[_i_counterfactuals['explainer'] == explainer_name].index)[0]
                 
             _cf = _i_counterfactuals.iloc[_index]
-            _instability = instability(test_dataset, i, _cf, list_of_counterfactuals_df, ranges, continous_indices, categorical_indices)
+            _instability = instability(test_dataset, i, _cf, 
+                                       list_of_counterfactuals_df, 
+                                       ranges, continous_indices, 
+                                       categorical_indices)
             experiment_scores['instability'][explainer_name].append(_instability)
             
             _sparsity = sparsity(test_dataset.iloc[i].to_numpy(), _cf.to_numpy(), continous_indices, categorical_indices)
@@ -196,7 +219,8 @@ for dataset in DATASETS:
             experiment_scores['discriminative_power_9'][explainer_name].append(_score['DiscriminativePower(9)'])
             experiment_scores['coverage'][explainer_name] += 1
             
-            actionable = is_actionable(test_dataset.iloc[i].to_numpy(), _cf.to_numpy(), continous_indices, categorical_indices, freeze_indices)
+            actionable = is_actionable(test_dataset.iloc[i].to_numpy(), _cf.to_numpy(), 
+                                       continous_indices, categorical_indices, freeze_indices)
             experiment_scores['actionable'][explainer_name] += int(actionable)
             
             # Create list of scores for experiment 2 by adding scores for idael point and random choice
@@ -227,7 +251,8 @@ for dataset in DATASETS:
     else:
         experiment1_df.to_csv(experiment1_savepath + '.csv')
 
-    latex = pandas_to_latex(experiment1_df, 
+    _, _latex_df = generate_latex_table(experiment1_df)
+    latex = pandas_to_latex(_latex_df, 
                             keep_formatting=True,
                             save_dir=RESULTS_PATH,
                             save_file=True,
@@ -235,7 +260,9 @@ for dataset in DATASETS:
                             )
     logging.debug(latex)
 
-    combinations = [(i/RESOLUTION, (RESOLUTION-i-k)/RESOLUTION, k/RESOLUTION) for i in range(0,RESOLUTION+1) for k in range(0,RESOLUTION-i+1)]
+    combinations = [(i/RESOLUTION, (RESOLUTION-i-k)/RESOLUTION, k/RESOLUTION) 
+                    for i in range(0,RESOLUTION+1) 
+                    for k in range(0,RESOLUTION-i+1)]
 
     results = []
     normalized_scores = []

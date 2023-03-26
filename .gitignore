@@ -12,6 +12,7 @@ archive.ics.*
 images/
 data/test*
 
+*tmp_results*
 *.local.bat
 *_local*
 

@@ -13,20 +13,20 @@ SYMBOL_MAP={
         'face': 'cross',
         'wachter': 'star',
         'fimap': 'pentagon',
-        #'cem': 'triangle-up',
-        #'cfproto': 'diamond-x',
-        #'dice': 'star-square'
+        #'dice-1': 'triangle-up',
+        'cfproto-1': 'diamond-x',
+        'cem': 'x'
         }
 COLOR_MAP={
-        'ideal_point_eucli': '#ff7f00',
-        'ideal_point_manha': '#1f78b4',
-        'cadex': '#b15928',
-        'face': '#33a02c',
-        'wachter': '#fb9a99',
-        'fimap': '#e31a1c',
-        'cem': '#a6cee3',
-        'cfproto': '#6a3d9a',
-        'dice': '#b2df8a',
+        #'ideal_point_eucli': '#ff7f00',
+        'ideal_point_manha': '#377eb8',
+        'cadex': '#e41a1c',
+        'face': '#4daf4a',
+        'wachter': '#984ea3',
+        'fimap': '#ff7f00',
+        'dice-1': '#e6ab02',
+        'cfproto-1': '#a65628',
+        'cem': '#f781bf',
         }
 
 def plot_tenary_visualization(results: List,
@@ -65,48 +65,67 @@ def plot_tenary_visualization(results: List,
                             #size="percentage", 
                             hover_name="explainer",  
                             # Change plot size
-                            height=800,
-                            width=1000,
+                            height=1000,
+                            width=1500,
                             symbol_map=SYMBOL_MAP,
                             color_discrete_map=COLOR_MAP,
                             size_max=20,
-                            size=[20 for _ in range(len(x))]
+                            size=[20 for _ in range(len(x))],
+                            opacity=1,
                             )
     
     #fig.update_traces(fill='toself', selector=dict(type='scatterternary'))
     fig.update_traces(cliponaxis=False, selector=dict(type='scatterternary'), overwrite=True)
     fig.update_layout(showlegend=False, overwrite=True)
     fig.update_ternaries(
-        aaxis_title="Discriminative Power",
+        aaxis_title="<b>Discriminative Power</b>",
+        aaxis_title_font_size=25,
         aaxis_layer= "below traces",
         aaxis_showline=True,
         aaxis_showgrid=True,
         aaxis_gridcolor="grey",
         aaxis_linecolor="black",
+        # turn off ticks
+        aaxis_tickfont=dict(color="white"),
         
-        baxis_title="Feasibility",
+        baxis_title="<b>Feasibility</b>",
+        baxis_title_font_size=25,
         baxis_layer= "below traces",
         baxis_showline=True,
         baxis_showgrid=True,
         baxis_gridcolor="grey",
         baxis_linecolor="black",
+        baxis_tickfont=dict(color="white"),
         
-        caxis_title="Proximity",
+        caxis_title="<b>Proximity</b>",
+        caxis_title_font_size=25,
         caxis_layer= "below traces",
         caxis_showline=True,
         caxis_showgrid=True,
         caxis_gridcolor="grey",
         caxis_linecolor="black",
+        caxis_tickfont=dict(color="white"),
         
         bgcolor="white",
         overwrite=True,
     )
-    
+    # fig.update_layout(legend=dict(
+    #                     title_font_family="Times New Roman",
+    #                     font=dict(
+    #                         size=35,
+    #                         ),
+    #                     itemsizing='constant',
+    #                     ), 
+    #                 overwrite=True) 
     # Save plot to png
     if only_valid:
-        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}_valid.eps"), format='eps')
+        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}_valid.svg"), format='svg')
+        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}_valid.png"), format='png')
+        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}_valid.pdf"), format='pdf')
     else:
-        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}.eps"), format='eps')
+        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}.svg"), format='svg')
+        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}.png"), format='png')
+        fig.write_image(os.path.join(write_path, f"experiment2_{dataset_name}_valid.pdf"), format='pdf')
         
     fig.show()
     
@@ -118,7 +137,7 @@ def generate_one_plot_for_all4():
     ax = ax.flatten()
     # imread all 4 images
     for i, dataset in enumerate(['adult', 'german', 'compas', 'fico']):
-        img = plt.imread(f'experiments\\tmp_results\\experiment2_{dataset}_valid.eps', format='eps')
+        img = plt.imread(f'experiments\\tmp_results\\experiment2_{dataset}_valid.png', format='png')
         ax[i].imshow(img)
         # remove ticks
         ax[i].set_xticks([])
@@ -131,14 +150,37 @@ def generate_one_plot_for_all4():
     
     # legend_img = plt.imread(f'experiments\\tmp_results\\legend.png')
     # ax[1].imshow(legend_img, extent=[0, 1, 0, 1])
-    plt.savefig(f'experiments\\tmp_results\\4plots.eps', format='eps')
+    plt.savefig(f'experiments\\tmp_results\\4plots.svg', format='svg', dpi=300)
+    plt.savefig(f'experiments\\tmp_results\\4plots.png', format='png', dpi=300)
     plt.tight_layout()
     plt.show()
     
 def generate_only_plotly_legend():
+    _SYMBOL_MAP={
+        #'ideal_point_eucli': 'circle',
+        'our ensemble (Manhattan)': 'circle-x',
+        'Cadex': 'square',
+        'FACE': 'cross',
+        'Wachter': 'star',
+        'Fimap': 'pentagon',
+        #'dice-1': 'triangle-up',
+        'CFProto': 'diamond-x',
+        'CEM': 'x'
+        }
+    _COLOR_MAP={
+            #'ideal_point_eucli': '#ff7f00',
+            'our ensemble (Manhattan)': '#377eb8',
+            'Cadex': '#e41a1c',
+            'FACE': '#4daf4a',
+            'Wachter': '#984ea3',
+            'Fimap': '#ff7f00',
+            'Dice': '#e6ab02',
+            'CFProto': '#a65628',
+            'CEM': '#f781bf',
+            }
     l = []
-    for symbol in SYMBOL_MAP.keys():
-        l.append([0, 0, 1, symbol, 10])
+    for symbol in _SYMBOL_MAP.keys():
+        l.append([0.1, 0.4, 0.5, symbol, 25])
     
     _df = pd.DataFrame(l, columns=['a', 'b', 'c', 'explainer', 'size'])
         
@@ -149,19 +191,23 @@ def generate_only_plotly_legend():
         c='c',
         symbol='explainer',
         color='explainer',
-        symbol_map=SYMBOL_MAP,
-        color_discrete_map=COLOR_MAP,
+        symbol_map=_SYMBOL_MAP,
+        color_discrete_map=_COLOR_MAP,
         # increase symbol size
         size='size',
-        size_max=30
+        size_max=25,
+        opacity=1,
+        #marker_size=50,
     )
     fig.update_layout(legend=dict(
                             title_font_family="Times New Roman",
-                            font=dict(size=10)
-                            
-                            )   
-                        )
-    fig.write_image(f'experiments\\tmp_results\\legend_raw.png')
+                            font=dict(size=35),
+                            itemsizing='trace',
+                            orientation='h',
+                            ), 
+                      overwrite=True) 
+    fig.write_image(f'experiments\\tmp_results\\legend_raw.png', width=2000, height=1200)
+    fig.write_image(f'experiments\\tmp_results\\legend_raw.svg', width=2000, height=1200, format='svg')
     fig.show()
     
     
@@ -174,5 +220,8 @@ if __name__ == '__main__':
         )
     
     #plot_tenary_visualization(results, 'test', 'experiments\\tmp_results\\')
-    generate_one_plot_for_all4()
-    #generate_only_plotly_legend()
+    #generate_one_plot_for_all4()
+    generate_only_plotly_legend()
+    
+    # from cairosvg import svg2png
+    # svg2png(url="experiments\\tmp_results\\experiment2_fico_valid.svg",  write_to="experiments\\tmp_results\\experiment2_fico_valid.png")
