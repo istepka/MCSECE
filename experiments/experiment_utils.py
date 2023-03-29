@@ -130,7 +130,8 @@ def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.D
                 df = pd.read_csv(f)
 
             dfs.append(df)
-
+    print(idcs)
+    dfs = [dfs[idcs.index(i)] for i in range(len(idcs))] # reorder the dfs according to the test data order
     _all = pd.concat(dfs)
     return dfs, _all, idcs
 
@@ -337,10 +338,10 @@ def is_actionable(x_instance: npt.NDArray,
     '''
     for freeze_index in freeze_indices:
         if freeze_index in continous_indices \
-            and not np.isclose(x_instance[freeze_index:freeze_index+1].astype('float64'), cf_instance[freeze_index:freeze_index+1].astype('float64'), atol=1e-05):
+            and not np.isclose(x_instance[freeze_index:freeze_index+1].astype('float64'), cf_instance[freeze_index:freeze_index+1].astype('float64')):
             return False
         if freeze_index in categorical_indices \
-            and not np.equal(x_instance.astype('str')[freeze_index], cf_instance.astype('str')[freeze_index]):
+            and x_instance.astype('str')[freeze_index] != cf_instance.astype('str')[freeze_index]:
             return False
     return True
 

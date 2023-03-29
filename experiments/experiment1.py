@@ -35,7 +35,7 @@ DATES = ['2023-03-12', '2023-03-14', '2023-03-15']
 # This corresponds to folders containing countefactuals from different run where dice-1, cfproto-1 and wchater-1 were generated
 DATES_OTHER_METHODS = ['2023-03-22', '2023-03-23']
 ONLY_VALID_MODE = True
-RESULTS_DIR = 'tmp_results'
+RESULTS_DIR = 'tmp_results2'
 RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR)
 # Last 5 letters indicate distance metric
 ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice'] 
@@ -84,6 +84,8 @@ for dataset in DATASETS:
     sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all, sup_valid_cf_test_set_indices = load_data('valid_counterfactuals', DATES_OTHER_METHODS, dataset)
     sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all = rename_explainers(sup_list_of_valid_counterfactuals_df, sup_valid_counterfactuals_df_all)
     logging.debug(f'Gathered supplement data for {len(sup_list_of_scores_df)} instances')
+    logging.debug(f'Valid dice instances {sup_valid_counterfactuals_df_all["explainer"].value_counts()}')
+    logging.debug(f'{sum(["dice-1" in x["explainer"].to_list() for x in sup_list_of_valid_counterfactuals_df])}')
 
     # Load test data - original x instances
     if 'experiments' in os.getcwd():
@@ -92,7 +94,7 @@ for dataset in DATASETS:
         test_data_path = os.path.join(os.getcwd(), 'data', f'{dataset}_test.csv')
 
 
-    test_dataset = pd.read_csv(test_data_path).iloc[scores_test_set_indices]
+    test_dataset = pd.read_csv(test_data_path).iloc[0:len(list_of_counterfactuals_df)]
     logging.debug(f'Loaded test data for {len(test_dataset)} instances')
 
     # Load constraints for the dataset
@@ -153,7 +155,7 @@ for dataset in DATASETS:
                 actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, 
                                                             continous_indices, categorical_indices, 
                                                             freeze_indices)
-                
+                                
                 _i_counterfactuals = _i_counterfactuals.iloc[actionable_indices]
                 _i_scores = _i_scores.iloc[actionable_indices]
                 
@@ -181,10 +183,12 @@ for dataset in DATASETS:
                 
             elif explainer_name in SUPPLEMENT_METHODS:
                 if ONLY_VALID_MODE:
-                    _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_valid_counterfactuals_df[i]], ignore_index=True) \
-                                            .reset_index(drop=True)
-                    _i_scores = pd.concat([_i_scores, sup_list_of_valid_scores_df[i]], ignore_index=True)\
-                                    .reset_index(drop=True)
+                    # _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_valid_counterfactuals_df[i]], ignore_index=True) \
+                    #                         .reset_index(drop=True)
+                    # _i_scores = pd.concat([_i_scores, sup_list_of_valid_scores_df[i]], ignore_index=True)\
+                    #                 .reset_index(drop=True)
+                    _i_counterfactuals = sup_list_of_valid_counterfactuals_df[i].copy(deep=True)
+                    _i_scores = sup_list_of_valid_scores_df[i].copy(deep=True)
                 else:
                     _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_counterfactuals_df[i]], ignore_index=True) \
                                             .reset_index(drop=True)
@@ -194,7 +198,7 @@ for dataset in DATASETS:
                 if explainer_name not in _i_scores['explainer'].unique():
                     continue
                 
-                _index = _i_scores[_i_counterfactuals['explainer'] == explainer_name].index[0]
+                _index = _i_counterfactuals[_i_counterfactuals['explainer'] == explainer_name].index[0]
                 
             elif explainer_name not in _i_scores['explainer'].unique():
                 continue
@@ -250,7 +254,7 @@ for dataset in DATASETS:
         experiment1_df.to_csv(experiment1_savepath + '_valid.csv')
     else:
         experiment1_df.to_csv(experiment1_savepath + '.csv')
-
+  
     _, _latex_df = generate_latex_table(experiment1_df)
     latex = pandas_to_latex(_latex_df, 
                             keep_formatting=True,
@@ -270,7 +274,7 @@ for dataset in DATASETS:
         # normalize scores in columns
         scores = scores.copy().reset_index(drop=True)
         x = scores[PLOT_METRICS]
-        x = (x - x.min()) / (x.max() - x.min()) 
+        x = (x - x.min(axis=0)) / (x.max(axis=0) - x.min(axis=0)) 
         scores[PLOT_METRICS] = x
         normalized_scores.append(scores)
 
