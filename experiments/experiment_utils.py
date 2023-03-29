@@ -112,9 +112,9 @@ def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.D
     
     for date in dates:
         if 'experiments' in os.getcwd():
-            directory = f'./{date}'
+            directory = f'./data/{date}'
         else:
-            directory = f'./experiments/{date}'
+            directory = f'./experiments/data/{date}'
     
         _, _, stats_filenames = os.walk(f'{directory}/{type}/').__next__()
         for stat_filename in stats_filenames:
@@ -149,9 +149,9 @@ def load_stats(dates: List[str], dataset_name: str) -> Tuple[List[Dict], List]:
     idcs = []
     for date in dates:
         if 'experiments' in os.getcwd():
-            directory = f'{date}'
+            directory = f'data/{date}'
         else:
-            directory = f'experiments/{date}'
+            directory = f'experiments/data/{date}'
         
         _dir = os.path.join(os.getcwd(), directory, 'stats')
         print(_dir)
