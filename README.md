@@ -23,14 +23,24 @@ To reproduce paper experiments (tested on Ubuntu 20) follow the steps:
     This might take some time. In order to speed things up you can easily run this script in parallel for each dataset.
 
 1. (optional) After data is properly generated experiments from the paper can be obtained by running:  
-    For Tables 2,3,4,5 and Figure 2
+    For Tables 2,3,4,5 (scores) and Figure 2 (barycentric plots)
     ```bash
     python3 experiments/experiment1.py
     ```
 
-    For Table 6
+    For Table 6 and 7 (statistics)
     ```bash
     python3 experiments/experiment1_stats.py
+    ```
+
+    For radar plots
+    ```bash
+    python3 experiments/radar_graphs.py
+    ```
+
+    For pareto front plots
+    ```bash
+    python3 experiments/pareto_front_graphs.py
     ```
 
 

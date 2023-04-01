@@ -37,4 +37,11 @@ python3 experiments/experiment1.py
 
 # Generate experiment stats (Tables with stats for explainer on each dataset)
 python3 experiments/experiment1_stats.py
+
+# Generate experiment results (barycentric plots)
+python3 experiments/radar_graphs.py
+
+# Generate experiment results (pareto front plots)
+python3 experiments/pareto_front_graphs.py
+
 # -- RUN GENERATING SUMMARIES AND PLOTS --
