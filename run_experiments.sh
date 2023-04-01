@@ -1,8 +1,8 @@
 #!/bin/bash
 
-dataset_name="german"
+dataset_name="adult"
 
-for i in {6..99}
+for i in {0..250}
 do
     echo "Running experiment $i"
     # Activate conda environment

@@ -137,7 +137,7 @@ def generate_one_plot_for_all4():
     ax = ax.flatten()
     # imread all 4 images
     for i, dataset in enumerate(['adult', 'german', 'compas', 'fico']):
-        img = plt.imread(f'experiments\\tmp_results\\experiment2_{dataset}_valid.png', format='png')
+        img = plt.imread(os.path.join(f'experiments', 'results', 'experiment2_visualisation', f'experiment2_{dataset}_valid.png'), format='png')
         ax[i].imshow(img)
         # remove ticks
         ax[i].set_xticks([])
@@ -150,8 +150,8 @@ def generate_one_plot_for_all4():
     
     # legend_img = plt.imread(f'experiments\\tmp_results\\legend.png')
     # ax[1].imshow(legend_img, extent=[0, 1, 0, 1])
-    plt.savefig(f'experiments\\tmp_results\\4plots.svg', format='svg', dpi=300)
-    plt.savefig(f'experiments\\tmp_results\\4plots.png', format='png', dpi=300)
+    plt.savefig(os.path.join(f'experiments', 'results','4plots.svg'), format='svg', dpi=300)
+    plt.savefig(os.path.join(f'experiments', 'results','4plots.png'), format='png', dpi=300)
     plt.tight_layout()
     plt.show()
     
@@ -206,8 +206,8 @@ def generate_only_plotly_legend():
                             orientation='h',
                             ), 
                       overwrite=True) 
-    fig.write_image(f'experiments\\tmp_results\\legend_raw.png', width=2000, height=1200)
-    fig.write_image(f'experiments\\tmp_results\\legend_raw.svg', width=2000, height=1200, format='svg')
+    fig.write_image(os.path.join(os.getcwd(), f'experiments', 'results', 'experiment2_visualisation', 'legend_raw.png'), width=2000, height=1200)
+    fig.write_image(os.path.join(os.getcwd(), f'experiments', 'results', 'experiment2_visualisation' ,'legend_raw.png'), width=2000, height=1200, format='svg')
     fig.show()
     
     

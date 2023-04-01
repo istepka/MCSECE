@@ -16,6 +16,10 @@ DATES = ['2023-03-12', '2023-03-14', '2023-03-15']
 EXPLAINERS = ['cem', 'face', 'growing-spheres', 'cfproto', 'cadex', 'wachter', 'fimap', 'actionable-recourse', 'dice']
 COLLECT_STAT = ['all_cfs_count', 'valid_cfs_count', 'valid_actionable_cfs_count', 'pareto_frontier_count', 'cover']
 
+WRITE_DIR = os.path.join(os.getcwd(), 'experiments', 'results', 'experiment1_stats')
+if os.path.exists(WRITE_DIR) is False:
+    os.makedirs(WRITE_DIR)
+
 aggregated = {
     'german': {k: {kk: 0 for kk in COLLECT_STAT} for k in EXPLAINERS},
     'adult': {k: {kk: 0 for kk in COLLECT_STAT} for k in EXPLAINERS},
@@ -59,7 +63,7 @@ for dataset, data in aggregated.items():
     latex = latex.replace(rf'\toprule', '\hline')
     latex = latex.replace(rf'\bottomrule', '\hline')
     latex = latex.replace(rf'\midrule', '\hline')
-    with open(f'experiments/tmp_results/{dataset}_stats.tex', 'w') as f:
+    with open(os.path.join(WRITE_DIR, f'{dataset}_stats.tex'), 'w') as f:
         f.write(latex)
 
 print(aggregated)

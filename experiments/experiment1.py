@@ -35,7 +35,7 @@ DATES = ['2023-03-12', '2023-03-14', '2023-03-15']
 # This corresponds to folders containing countefactuals from different run where dice-1, cfproto-1 and wchater-1 were generated
 DATES_OTHER_METHODS = ['2023-03-22', '2023-03-23']
 ONLY_VALID_MODE = True
-RESULTS_DIR = 'tmp_results2'
+RESULTS_DIR = 'results'
 RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR)
 # Last 5 letters indicate distance metric
 ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice'] 
@@ -45,7 +45,7 @@ SUPPLEMENT_METHODS = ['dice-1', 'cfproto-1', 'wachter-1']
 
 # INITIALIZATION
 if not os.path.exists(RESULTS_PATH):
-    os.mkdir(RESULTS_PATH)
+    os.mkdirs(RESULTS_PATH)
 
 # Set logging
 logging.basicConfig(level=logging.DEBUG)
@@ -133,6 +133,8 @@ for dataset in DATASETS:
     }
 
     experiment2_list_of_scores = []
+    
+    ideal_point_stats = {k:0 for k in all_explainer_names}
 
     # Calculate instability for all counterfactuals
     for i in tqdm(range(len(test_dataset)), desc='Calculating instability and other scores'):
@@ -176,6 +178,7 @@ for dataset in DATASETS:
                 closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], 
                                                            pareto_mask, ideal_point, distance_metric)
                 _index = closest_idx
+                ideal_point_stats[_i_counterfactuals['explainer'].iloc[_index]] += 1
                 
             elif explainer_name == 'random_choice':
                 # Get random counterfactual from all counterfactuals
@@ -237,6 +240,16 @@ for dataset in DATASETS:
             experiment2scores = pd.concat([experiment2scores, new_record], axis=0)
         experiment2_list_of_scores.append(experiment2scores)
         
+    # Average ideal point stats
+    for k, v in ideal_point_stats.items():
+        ideal_point_stats[k] = v / (len(test_dataset) * 3) # 3 because we have 3 ideal point methods and we are averaging over all 
+    # Save ideal point stats
+    ideal_point_stats_savepath = os.path.join(RESULTS_PATH, 'ideal_point_stats')
+    if not os.path.exists(ideal_point_stats_savepath):
+        os.makedirs(ideal_point_stats_savepath)
+    with open(os.path.join(ideal_point_stats_savepath, f'ideal_point_stats_{dataset}.json'), 'w') as f:
+        json.dump(ideal_point_stats, f, indent=4)
+        
     # average experiment scores
     for metric_name, v in experiment_scores.items():
         for explainer_name, scores in v.items():
@@ -249,16 +262,19 @@ for dataset in DATASETS:
 
     # build dataframe from experiment scores
     experiment1_df = pd.DataFrame(experiment_scores).round(2)
-    experiment1_savepath = os.path.join(RESULTS_PATH, f'experiment1_{dataset}.csv')
+    experiment1_savepath = os.path.join(RESULTS_PATH, 'experiment1_dfs')
+    if not os.path.exists(experiment1_savepath):
+        os.makedirs(experiment1_savepath)
+    
     if ONLY_VALID_MODE:
-        experiment1_df.to_csv(experiment1_savepath + '_valid.csv')
+        experiment1_df.to_csv(os.path.join(experiment1_savepath, f'experiment1_{dataset}_valid.csv'))
     else:
-        experiment1_df.to_csv(experiment1_savepath + '.csv')
+        experiment1_df.to_csv(os.path.join(experiment1_savepath, f'experiment1_{dataset}.csv'))
   
     _, _latex_df = generate_latex_table(experiment1_df)
     latex = pandas_to_latex(_latex_df, 
                             keep_formatting=True,
-                            save_dir=RESULTS_PATH,
+                            save_dir=experiment1_savepath,
                             save_file=True,
                             save_name=f'experiment1_{dataset}.tex',
                             )
@@ -293,4 +309,7 @@ for dataset in DATASETS:
             
     logging.debug(results)
 
-    plot_tenary_visualization(results, dataset, RESULTS_PATH, ONLY_VALID_MODE)
+    visualisation_path = os.path.join(RESULTS_PATH, 'experiment2_visualisation')
+    if not os.path.exists(visualisation_path):
+        os.makedirs(visualisation_path)
+    plot_tenary_visualization(results, dataset, visualisation_path, ONLY_VALID_MODE)

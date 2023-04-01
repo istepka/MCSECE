@@ -1,0 +1,17 @@
+{
+    "dice": 0.3333333333333333,
+    "cadex": 0.2786666666666667,
+    "fimap": 0.08933333333333333,
+    "wachter": 0.144,
+    "cem": 0.042666666666666665,
+    "cfproto": 0.08133333333333333,
+    "growing-spheres": 0.021333333333333333,
+    "face": 0.009333333333333334,
+    "ideal_point_manha": 0.0,
+    "ideal_point_eucli": 0.0,
+    "ideal_point_cheby": 0.0,
+    "random_choice": 0.0,
+    "dice-1": 0.0,
+    "cfproto-1": 0.0,
+    "wachter-1": 0.0
+}
