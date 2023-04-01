@@ -1,5 +1,8 @@
 # Multi-criteria approach for selecting an explanation from the set of counterfactuals produced by an ensemble of explainers
 
+This is a repository for the paper: "Multi-criteria approach for selecting an explanation from the set of counterfactuals produced by an ensemble of explainers". 
+
+The paper is available at: <...>
 
 ## 1. Installation
 ```
@@ -19,7 +22,7 @@ To reproduce paper experiments (tested on Ubuntu 20) follow the steps:
     > chmod u+x run_reproducibility.sh
     > ./run_reproducibility.sh
     ```
-    Now under `./experiments` you should see a folder with your current date.  
+    Now under `./experiments/data` you should see a folder with your current date.  
     This might take some time. In order to speed things up you can easily run this script in parallel for each dataset.
 
 1. (optional) After data is properly generated experiments from the paper can be obtained by running:  
