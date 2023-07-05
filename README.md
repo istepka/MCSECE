@@ -12,9 +12,13 @@ pip install -r requirements.txt
 ```
 Go to `./modules` and check if CARLA and CFEC modules are loaded there. If not get them using git submodule command.
 
+## 2. Setup
+1. (compulsory) Unzip data/datasets.zip file into data/ folder.
+2. (optional - reproducibility) Unzip experiments/experiments_results.zip file into experiments/ folder.
+
 ***
-## 2. Reproducing paper experiments
-To reproduce paper experiments (tested on Ubuntu 20) follow the steps:
+## 3. Reproducing paper experiments
+To reproduce paper experiments (tested on Ubuntu 20) from scratch follow the steps:
 
 1. Set your conda environment path in `run_reproducibility.sh` script. 
 1. Generate explanations for the test datasets
@@ -25,7 +29,7 @@ To reproduce paper experiments (tested on Ubuntu 20) follow the steps:
     Now under `./experiments/data` you should see a folder with your current date.  
     This might take some time. In order to speed things up you can easily run this script in parallel for each dataset.
 
-1. (optional) After data is properly generated experiments from the paper can be obtained by running:  
+1. (optional) After data is properly generated or after unziping data from original paper experiments/experiments_results.zip file you can run the following scripts to obtain visualizations and statistics:  
     For Tables 2,3,4,5 (scores) and Figure 2 (barycentric plots)
     ```bash
     python3 experiments/experiment1.py
