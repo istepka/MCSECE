@@ -135,6 +135,7 @@ for dataset in DATASETS:
     experiment2_list_of_scores = []
     
     ideal_point_stats = {k:0 for k in all_explainer_names}
+    pareto_front_stats = {k:0 for k in all_explainer_names}
 
     # Calculate instability for all counterfactuals
     for i in tqdm(range(len(test_dataset)), desc='Calculating instability and other scores'):
@@ -179,6 +180,15 @@ for dataset in DATASETS:
                                                            pareto_mask, ideal_point, distance_metric)
                 _index = closest_idx
                 ideal_point_stats[_i_counterfactuals['explainer'].iloc[_index]] += 1
+                
+                
+                #print(pareto_mask)
+                pareto_front_cfs = _i_counterfactuals['explainer'].to_numpy()[pareto_mask.astype(bool)]
+                
+                for c in pareto_front_cfs:
+                    pareto_front_stats[c] += 1
+                
+                
                 
             elif explainer_name == 'random_choice':
                 # Get random counterfactual from all counterfactuals
@@ -239,7 +249,13 @@ for dataset in DATASETS:
             })
             experiment2scores = pd.concat([experiment2scores, new_record], axis=0)
         experiment2_list_of_scores.append(experiment2scores)
-        
+    
+    with open(os.path.join(RESULTS_PATH, f'{dataset}-pareto_front_stats.json'), 'w') as f:
+        save = {}
+        for k, v in pareto_front_stats.items():
+            save[k] = round(v / len(test_dataset), 3)
+        json.dump(save, f, indent=4)
+    
     # Average ideal point stats
     for k, v in ideal_point_stats.items():
         ideal_point_stats[k] = v / (len(test_dataset) * 3) # 3 because we have 3 ideal point methods and we are averaging over all 
