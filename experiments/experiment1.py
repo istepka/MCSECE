@@ -1,11 +1,11 @@
+import os
+import json
+import logging
 import pandas as pd
 import numpy as np
 import numpy.typing as npt
 import seaborn as sns
 import matplotlib.pyplot as plt
-import os
-import json
-import logging
 from tqdm import tqdm
 from typing import List
 from collections import defaultdict
@@ -17,15 +17,16 @@ from experiment_utils import *
 from visualization_utils import *
 from quick_rename import rename_explainers
 
-
 pio.renderers.default = "browser"
-
-# Seed for reproducibility
-np.random.seed(42)
 
 # Change cwd to experiments
 if 'experiments' not in os.getcwd():
     os.chdir('experiments')
+    
+    
+# flags
+ONLY_VALID_MODE = True
+FILTERING_STEP = True
 
 RESOLUTION = 15
 PLOT_METRICS = ['DiscriminativePower(9)', 'K_Feasibility(3)', 'Proximity']
@@ -34,18 +35,28 @@ DATASETS = ['german', 'adult', 'compas', 'fico']
 DATES = ['2023-03-12', '2023-03-14', '2023-03-15'] 
 # This corresponds to folders containing countefactuals from different run where dice-1, cfproto-1 and wchater-1 were generated
 DATES_OTHER_METHODS = ['2023-03-22', '2023-03-23']
-ONLY_VALID_MODE = True
-RESULTS_DIR = 'results'
-RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR)
+
+# Setup results directory
+RESULTS_DIR = 'results_rebuttal_ipm_ns'
+RESULTS_SUBDIR = 'filtering_on'
+RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR, RESULTS_SUBDIR)
+
 # Last 5 letters indicate distance metric
-ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice'] 
+ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice', 'weighted_function'] 
 # Last 2 letters indicate the number of counterfactuals generated
 SUPPLEMENT_METHODS = ['dice-1', 'cfproto-1', 'wachter-1'] 
 
 
 # INITIALIZATION
 if not os.path.exists(RESULTS_PATH):
-    os.mkdirs(RESULTS_PATH)
+    os.makedirs(RESULTS_PATH)
+    
+# Seed for reproducibility
+SEED = 42
+np.random.seed(SEED)
+with open(os.path.join(RESULTS_PATH, 'settings.txt'), 'w') as f:
+    f.write(f'SEED: {SEED}\n')
+    
 
 # Set logging
 logging.basicConfig(level=logging.DEBUG)
@@ -154,19 +165,36 @@ for dataset in DATASETS:
             _i_scores = i_scores.copy(deep=True)
             
             if 'ideal_point' in explainer_name:
-                # Filter counterfactuals to include only actionable
-                actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, 
-                                                            continous_indices, categorical_indices, 
-                                                            freeze_indices)
-                                
+                if FILTERING_STEP:
+                    # Filter counterfactuals to include only actionable
+                    actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, 
+                                                                continous_indices, categorical_indices, 
+                                                                freeze_indices)
+                else:
+                    actionable_indices = _i_counterfactuals.index
+                                    
                 _i_counterfactuals = _i_counterfactuals.iloc[actionable_indices]
                 _i_scores = _i_scores.iloc[actionable_indices]
                 
                 # Get counterfactual closest to ideal point
                 iscores = _i_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
                 
-                # Apply normalization in each feature
+                # Apply standardization in each feature
+                # iscores = (iscores - iscores.mean(axis=0)) / iscores.std(axis=0)
+                
+                
+                # Change all optimization directions to positive
+                for col, direction in enumerate(['min', 'min', 'max']):
+                    if direction == 'min':
+                        # Shift to all positive
+                        iscores[:, col] = iscores[:, col] + abs(min(iscores[:, col])) 
+                        # Reverse direction
+                        iscores[:, col] = max(iscores[:, col]) - iscores[:, col]
+    
+                # # # Apply normalization in each feature
                 iscores = (iscores - iscores.min(axis=0)) / (iscores.max(axis=0) - iscores.min(axis=0))
+                
+                
                 distance_metric = explainer_name[-5:]
                 #logging.debug(f'Using distance metric: {distance_metric}')
                 
@@ -174,10 +202,11 @@ for dataset in DATASETS:
                 if 'manha' in distance_metric: distance_metric = 'manhattan'
                 if 'cheby' in distance_metric: distance_metric = 'chebyshev'
                 
-                pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
-                ideal_point = get_ideal_point(iscores, ['min', 'min', 'max'], pareto_mask)
-                closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], 
-                                                           pareto_mask, ideal_point, distance_metric)
+                pareto_mask = get_pareto_optimal_mask(iscores, ['max', 'max', 'max'])
+                ideal_point = get_ideal_point(iscores, ['max', 'max', 'max'], pareto_mask)
+                anti_ideal_point = get_ideal_point(iscores, ['min', 'min', 'min'], pareto_mask)
+                closest_idx = get_closest_to_optimal_point(iscores, ['max', 'max', 'max'], 
+                                                           pareto_mask, ideal_point, anti_ideal_point, distance_metric)
                 _index = closest_idx
                 ideal_point_stats[_i_counterfactuals['explainer'].iloc[_index]] += 1
                 
@@ -187,13 +216,28 @@ for dataset in DATASETS:
                 
                 for c in pareto_front_cfs:
                     pareto_front_stats[c] += 1
-                
-                
-                
+                       
             elif explainer_name == 'random_choice':
                 # Get random counterfactual from all counterfactuals
                 _index = np.random.permutation(_i_scores.index)[0]
                 
+            elif explainer_name == 'weighted_function':
+                if FILTERING_STEP:
+                    # Filter counterfactuals to include only actionable
+                    actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, 
+                                                                continous_indices, categorical_indices, 
+                                                                freeze_indices)
+                else:
+                    actionable_indices = _i_counterfactuals.index
+                                    
+                _i_counterfactuals = _i_counterfactuals.iloc[actionable_indices]
+                _i_scores = _i_scores.iloc[actionable_indices]
+                
+                # Equally weight all scores and add them together to create a collapsed function score
+                # e.g., 1/3  * proximity + 1/3 * discriminative + 1/3 * feasibility
+                iscores = _i_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
+                _index = get_best_by_weighting(iscores, ['min', 'min', 'max'])
+
             elif explainer_name in SUPPLEMENT_METHODS:
                 if ONLY_VALID_MODE:
                     # _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_valid_counterfactuals_df[i]], ignore_index=True) \

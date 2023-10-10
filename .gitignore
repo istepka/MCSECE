@@ -11,6 +11,8 @@ CARLA/*
 archive.ics.*
 images/
 data/test*
+results_*/
+data/
 
 experiments/data/2*
 
