@@ -36,6 +36,12 @@ for dataset in PLOT_DATASETS:
         pareto_mask = get_pareto_optimal_mask(iscores, directions).astype(bool)
         ideal_point = get_ideal_point(iscores, directions, pareto_mask)
         
+        
+        # Draw line to closest counterfactual from pareto front
+        a = np.sum((iscores[pareto_mask] - iscores[pareto_mask].min(axis=0) / (iscores[pareto_mask].max(axis=0) - iscores[pareto_mask].min(axis=0))) - ideal_point, axis=1)
+        idx = np.argmin(a**2) 
+        coordinates_closest = iscores[pareto_mask][idx]
+        
         print(pareto_mask.sum())
         print(len(pareto_mask))
         
@@ -43,18 +49,29 @@ for dataset in PLOT_DATASETS:
         color2 = '#ff7f00'
         color3 = '#e41a1c'
         
+        
+        metric1 = 0
+        metric2 = 1
         # Plot 2D Pareto Front
         fig, ax = plt.subplots(figsize=(6, 5))
-        plt.scatter(iscores[~pareto_mask, 0], iscores[~pareto_mask, 1], c=color1, alpha=0.8, label='Dominated', marker='s')
-        plt.scatter(iscores[pareto_mask, 0], iscores[pareto_mask, 1], c=color2, alpha=0.8, label='Nondominated', marker='o')
-        plt.scatter(ideal_point[0], ideal_point[1], c=color3, label='Ideal Point', marker='x')
+        plt.scatter(iscores[~pareto_mask, metric1], iscores[~pareto_mask, metric2], c=color1, alpha=0.8, label='Dominated', marker='s')
+        plt.scatter(iscores[pareto_mask, metric1], iscores[pareto_mask, metric2], c=color2, alpha=0.8, label='Nondominated', marker='o')
+        plt.scatter(ideal_point[metric1], ideal_point[metric2], c=color3, label='Ideal Point', marker='x')
         
         # Remove top and right spines
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         
-        plt.xlabel(metrics[0])
-        plt.ylabel(metrics[1])
+        # Draw line to the best counterfactual
+        ax.plot(
+            [coordinates_closest[metric1], ideal_point[metric1]],
+            [coordinates_closest[metric2], ideal_point[metric2]],
+            color='#a65628',
+            linestyle='dashed'
+            )
+        
+        plt.xlabel(metrics[metric1])
+        plt.ylabel(f'{metrics[metric2]}')
         # plot legend in the upper right corner 
         plt.legend(loc='lower right')
         plt.tight_layout()
@@ -72,13 +89,7 @@ for dataset in PLOT_DATASETS:
         ax3d.scatter(iscores[pareto_mask, 0], iscores[pareto_mask, 1], iscores[pareto_mask, 2], c=color2, alpha=0.8, label='Nondominated', marker='o', s=markersize)
         ax3d.scatter(ideal_point[0], ideal_point[1], ideal_point[2], c=color3, label='Ideal Point', marker='x', s=markersize+10)
         
-        # Draw line to closest counterfactual from pareto front
-        a = np.sum((iscores[pareto_mask] - iscores[pareto_mask].min(axis=0) / (iscores[pareto_mask].max(axis=0) - iscores[pareto_mask].min(axis=0))) - ideal_point, axis=1)
-        idx = np.argmin(a**2) 
-        coordinates_closest = iscores[pareto_mask][idx]
-        
-        
-        
+        # Draw a line to the best counterfactual
         ax3d.plot(
             [coordinates_closest[0], ideal_point[0]],
             [coordinates_closest[1], ideal_point[1]],

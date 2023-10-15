@@ -67,6 +67,15 @@ print(f'Applying dominance relation drops: {len(data) - pareto_mask.sum()}. Left
 
 a = np.sum((iscores[pareto_mask] - iscores[pareto_mask].min(axis=0) / (iscores[pareto_mask].max(axis=0) - iscores[pareto_mask].min(axis=0))) - ideal_point, axis=1)
 idx = np.argmin(a**2) 
+print('best:', idx)
 coordinates_closest = iscores[pareto_mask][idx]
 
-print(data.iloc[2])
+print(data.iloc[4])
+print(pareto_mask)
+
+
+
+print(f'Invalid indices: {invalid.index.tolist()}')
+print(f'Nonactionable indices: {nonactionable.index.tolist()}')
+print(f'Pareto Front indices: {data[pareto_mask].index.tolist()}')
+print(f'The rest indices: {data[~pareto_mask].index.tolist()}')
