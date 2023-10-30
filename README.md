@@ -6,7 +6,7 @@ The paper is available at: <...>
 
 ## 1. Installation
 ```
-git clone --recurse-submodules https://github.com/iggyyy/ecemosp
+git clone --recurse-submodules https://github.com/istepka/MCSECE
 conda create -n <env_name> python==3.10
 pip install -r requirements.txt
 ```
