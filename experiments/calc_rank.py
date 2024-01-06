@@ -2,8 +2,10 @@ import pandas as pd
 import numpy as np
 import os 
 
-SOURCE_DIR = os.path.join(os.getcwd(), 'experiments', 'results', 'experiment1_dfs')
-SAVE_DIR = os.path.join(os.getcwd(), 'experiments', 'results', 'experiment1_dfs', 'rank')
+
+RESULTS_DIR = 'results_rebuttal_ipm_ns/filtering_off'
+SOURCE_DIR = os.path.join(os.getcwd(), 'experiments', RESULTS_DIR, 'experiment1_dfs')
+SAVE_DIR = os.path.join(os.getcwd(), 'experiments', RESULTS_DIR, 'experiment1_dfs', 'rank')
 if not os.path.exists(SAVE_DIR):
     os.makedirs(SAVE_DIR)
 
@@ -24,3 +26,4 @@ for dataset in ['adult', 'compas', 'german', 'fico']:
     df['rank'] = df['rank'].round(2)
 
     df.to_latex(os.path.join(SAVE_DIR, f'experiment1_{dataset}_valid_rank.tex'))
+    df.to_csv(os.path.join(SAVE_DIR, f'experiment1_{dataset}_valid_rank.csv'))

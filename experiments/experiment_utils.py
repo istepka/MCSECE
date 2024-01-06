@@ -6,8 +6,17 @@ import pandas as pd
 import json
 import os
 
+# def euclidean_distance(a, b, c):
+#     return np.sqrt(np.sum((np.abs(a - b) / c) ** 2))
+
+# def chebyshev_distance(a, b, c):
+#     return np.max(np.abs(a - b) / c)
+
+# def manhattan_distance(a, b, c):
+#     return np.sum(np.abs(a-b) / c)
+
 def euclidean_distance(a, b):
-    return np.sqrt(np.sum((a - b) ** 2))
+    return np.sqrt(np.sum(np.abs(a - b) ** 2))
 
 def chebyshev_distance(a, b):
     return np.max(np.abs(a - b))
@@ -15,7 +24,12 @@ def chebyshev_distance(a, b):
 def manhattan_distance(a, b):
     return np.sum(np.abs(a-b))
 
-def calculate_distance_to_ideal_point(data: npt.NDArray, ideal_point: npt.NDArray, distance_metric: str = 'euclidean') -> npt.NDArray:
+
+def calculate_distance_to_ideal_point(data: npt.NDArray, 
+                                      ideal_point: npt.NDArray, 
+                                      anti_ideal_point: npt.NDArray,
+                                      distance_metric: str = 'euclidean',
+                                      ) -> npt.NDArray:
     """
     `data`: scores to explore
     `ideal_point`: ideal point of the pareto optimal points
@@ -32,6 +46,21 @@ def calculate_distance_to_ideal_point(data: npt.NDArray, ideal_point: npt.NDArra
             distance[i] = manhattan_distance(ins, ideal_point)
         else:
             distance[i] = euclidean_distance(ins, ideal_point)
+    
+    # for i, ins in enumerate(data):
+    #     if distance_metric == 'chebyshev':
+    #         ideal = chebyshev_distance(ins, ideal_point, 1)
+    #         anti = chebyshev_distance(ins, anti_ideal_point, 1)
+    #         distance[i] = ideal / (ideal + anti)
+    #     elif distance_metric == 'manhattan':
+    #         ideal = manhattan_distance(ins, ideal_point, 1)
+    #         anti = manhattan_distance(ins, anti_ideal_point, 1)
+    #         distance[i] = ideal / (ideal + anti)
+    #     else:
+    #         ideal = euclidean_distance(ins, ideal_point, 1)
+    #         anti = euclidean_distance(ins, anti_ideal_point, 1)
+    #         distance[i] = ideal / (ideal + anti)
+
 
     return distance
 
@@ -39,6 +68,7 @@ def get_closest_to_optimal_point(data: npt.NDArray,
                                  optimization_direction: List[str], 
                                  pareto_optimal_mask: npt.NDArray, 
                                  ideal_point: npt.NDArray,
+                                 anti_ideal_point: npt.NDArray,
                                  distance_metric: str = 'euclidean'
                                  ) -> npt.NDArray:
     """
@@ -50,8 +80,27 @@ def get_closest_to_optimal_point(data: npt.NDArray,
     
     return index of the closest point to the ideal point
     """
-    distances = calculate_distance_to_ideal_point(data, ideal_point, distance_metric)
+    
+    pareto_optimal_data = data[pareto_optimal_mask.astype(bool)]
+    
+    
+    # # Apply normalization in each feature
+    # pareto_optimal_data = (pareto_optimal_data - pareto_optimal_data.min(axis=0)) / (pareto_optimal_data.max(axis=0) - pareto_optimal_data.min(axis=0))
+    
+    distances = calculate_distance_to_ideal_point(pareto_optimal_data, ideal_point, anti_ideal_point, distance_metric)
     closest_index = np.argmin(distances)
+    
+    # Create mapping to original index space
+    mapping = {}
+    cnt = 0
+    for i, mask in enumerate(pareto_optimal_mask.astype(bool)):
+        if mask == True:
+            mapping[cnt] = i 
+            cnt += 1
+            
+    closest_index = mapping[closest_index]
+    
+    
     return closest_index
 
 def get_pareto_optimal_mask(data: npt.NDArray, optimization_direction: List[str]) -> npt.NDArray:
@@ -96,6 +145,39 @@ def get_ideal_point(data: npt.NDArray, optimization_direction: List[str], pareto
             ideal_point[i] = np.min(pareto_optimal_data[:, i])
             
     return ideal_point
+
+def get_best_by_weighting(scores: npt.NDArray,
+                          optimization_direction: List[str],
+                          ) -> int:
+    '''
+    Get index of best counterfactual by weighted score function
+    
+    `scores`: array of scores Ncounterfactuals x Mmetrics
+    `optimization direction`: list of ['max' and 'min'] of the data feature length (Mmetrics)
+
+    return index of best-scoring counterfactual by weighting function 
+    '''
+    # Change all optimization directions to positive
+    _scores = scores.copy()
+    for col, direction in enumerate(optimization_direction):
+        if direction == 'min':
+            # Shift to all positive
+            _scores[:, col] = _scores[:, col] + abs(min(_scores[:, col])) 
+            # Reverse direction
+            _scores[:, col] = max(_scores[:, col]) - _scores[:, col]
+    
+    # Normalize scores in order to decrease the distribution bias of each metric
+    std_scores: npt.NDArray = (_scores - _scores.min(axis=0)) / (_scores.max(axis=0) - _scores.min(axis=0))
+    # Standardize scores in order to decrease the distribution bias of each metric
+    # std_scores: npt.NDArray = (_scores - _scores.mean(axis=0)) / _scores.std(axis=0)
+    
+    # Add scores in the row
+    sum_scores: npt.NDArray = std_scores.sum(axis=1)
+    
+    # Get index of best scoring one
+    index = np.argmax(sum_scores)
+    
+    return index
 
 
 def load_data(type: str, dates: List[str], dataset_name: str) -> Tuple[List[pd.DataFrame], pd.DataFrame]:

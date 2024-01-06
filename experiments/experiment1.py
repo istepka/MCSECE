@@ -1,11 +1,11 @@
+import os
+import json
+import logging
 import pandas as pd
 import numpy as np
 import numpy.typing as npt
 import seaborn as sns
 import matplotlib.pyplot as plt
-import os
-import json
-import logging
 from tqdm import tqdm
 from typing import List
 from collections import defaultdict
@@ -17,35 +17,54 @@ from experiment_utils import *
 from visualization_utils import *
 from quick_rename import rename_explainers
 
-
-pio.renderers.default = "browser"
-
-# Seed for reproducibility
-np.random.seed(42)
+# pio.renderers.default = "browser"
 
 # Change cwd to experiments
 if 'experiments' not in os.getcwd():
     os.chdir('experiments')
+    
+    
+# flags
+ONLY_VALID_MODE = True
+FILTERING_STEP = True
 
-RESOLUTION = 15
+RESOLUTION = 8
 PLOT_METRICS = ['DiscriminativePower(9)', 'K_Feasibility(3)', 'Proximity']
 DATASETS = ['german', 'adult', 'compas', 'fico']
 # This corresponds to folders containing countefactuals 
 DATES = ['2023-03-12', '2023-03-14', '2023-03-15'] 
 # This corresponds to folders containing countefactuals from different run where dice-1, cfproto-1 and wchater-1 were generated
 DATES_OTHER_METHODS = ['2023-03-22', '2023-03-23']
-ONLY_VALID_MODE = True
-RESULTS_DIR = 'results'
-RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR)
+
+# Setup results directory
+RESULTS_DIR = 'results_NORMAL'
+RESULTS_SUBDIR = 'results'
+RESULTS_PATH = os.path.join(os.getcwd(), RESULTS_DIR, RESULTS_SUBDIR)
+
 # Last 5 letters indicate distance metric
-ADDITIONAL_METHODS = ['ideal_point_manha', 'ideal_point_eucli', 'ideal_point_cheby', 'random_choice'] 
+ADDITIONAL_METHODS = [
+                      'ideal_point_manha', 
+                      'ideal_point_eucli', 
+                      'ideal_point_cheby', 
+                      'unweighted_sum_on_pareto',
+                      'unweighted_sum_on_filtered', 
+                      'random_choice_on_pareto', 
+                      'random_choice_on_filtered',
+                      ] 
 # Last 2 letters indicate the number of counterfactuals generated
-SUPPLEMENT_METHODS = ['dice-1', 'cfproto-1', 'wachter-1'] 
+SUPPLEMENT_METHODS = []#['dice-1', 'cfproto-1', 'wachter-1'] 
 
 
 # INITIALIZATION
 if not os.path.exists(RESULTS_PATH):
-    os.mkdirs(RESULTS_PATH)
+    os.makedirs(RESULTS_PATH)
+    
+# Seed for reproducibility
+SEED = 42
+np.random.seed(SEED)
+with open(os.path.join(RESULTS_PATH, 'settings.txt'), 'w') as f:
+    f.write(f'SEED: {SEED}\n')
+    
 
 # Set logging
 logging.basicConfig(level=logging.DEBUG)
@@ -129,6 +148,7 @@ for dataset in DATASETS:
         'sparsity': {k: [] for k in all_explainer_names},
         'instability': {k: [] for k in all_explainer_names},
         'coverage': {k: 0 for k in all_explainer_names},
+        # 'validity': {k: 0 for k in all_explainer_names},
         'actionable': {k: 0 for k in all_explainer_names},
     }
 
@@ -137,14 +157,22 @@ for dataset in DATASETS:
     ideal_point_stats = {k:0 for k in all_explainer_names}
     pareto_front_stats = {k:0 for k in all_explainer_names}
 
-    # Calculate instability for all counterfactuals
-    for i in tqdm(range(len(test_dataset)), desc='Calculating instability and other scores'):
+    # Calculate stats for all counterfactuals and methods
+    for i in tqdm(range(len(test_dataset)), desc='Calculating scores'):
         if ONLY_VALID_MODE:
             i_counterfactuals = list_of_valid_counterfactuals_df[i]
             i_scores = list_of_valid_scores_df[i]
         else:
             i_counterfactuals = list_of_counterfactuals_df[i]
             i_scores = list_of_scores_df[i]
+    
+        if FILTERING_STEP:
+            # Filter counterfactuals to include only actionable
+            actionable_indices = get_actionable_indices(test_dataset.iloc[i], i_counterfactuals, 
+                                                        continous_indices, categorical_indices, 
+                                                        freeze_indices)
+        else:
+            actionable_indices = i_counterfactuals.index
         
         experiment2scores = pd.DataFrame(columns=['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)', 'explainer'])
         
@@ -153,20 +181,25 @@ for dataset in DATASETS:
             _i_counterfactuals = i_counterfactuals.copy(deep=True)
             _i_scores = i_scores.copy(deep=True)
             
-            if 'ideal_point' in explainer_name:
-                # Filter counterfactuals to include only actionable
-                actionable_indices = get_actionable_indices(test_dataset.iloc[i], _i_counterfactuals, 
-                                                            continous_indices, categorical_indices, 
-                                                            freeze_indices)
-                                
-                _i_counterfactuals = _i_counterfactuals.iloc[actionable_indices]
-                _i_scores = _i_scores.iloc[actionable_indices]
-                
+            _i_counterfactuals = _i_counterfactuals.iloc[actionable_indices]
+            _i_scores = _i_scores.iloc[actionable_indices]
+            
+            if 'ideal_point' in explainer_name:        
+                original_index = _i_scores.index                         
                 # Get counterfactual closest to ideal point
                 iscores = _i_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
                 
-                # Apply normalization in each feature
+                # Change all optimization directions to positive
+                for col, direction in enumerate(['min', 'min', 'max']):
+                    if direction == 'min':
+                        # Shift to all positive
+                        iscores[:, col] = iscores[:, col] + abs(min(iscores[:, col])) 
+                        # Reverse direction
+                        iscores[:, col] = max(iscores[:, col]) - iscores[:, col]
+    
+                # # # Apply normalization in each feature
                 iscores = (iscores - iscores.min(axis=0)) / (iscores.max(axis=0) - iscores.min(axis=0))
+                
                 distance_metric = explainer_name[-5:]
                 #logging.debug(f'Using distance metric: {distance_metric}')
                 
@@ -174,32 +207,72 @@ for dataset in DATASETS:
                 if 'manha' in distance_metric: distance_metric = 'manhattan'
                 if 'cheby' in distance_metric: distance_metric = 'chebyshev'
                 
-                pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
-                ideal_point = get_ideal_point(iscores, ['min', 'min', 'max'], pareto_mask)
-                closest_idx = get_closest_to_optimal_point(iscores, ['min', 'min', 'max'], 
-                                                           pareto_mask, ideal_point, distance_metric)
-                _index = closest_idx
-                ideal_point_stats[_i_counterfactuals['explainer'].iloc[_index]] += 1
+                pareto_mask = get_pareto_optimal_mask(iscores, ['max', 'max', 'max'])
+                # pareto_mask = np.ones(len(iscores)).astype(bool)
+                ideal_point = get_ideal_point(iscores, ['max', 'max', 'max'], pareto_mask)
+                anti_ideal_point = get_ideal_point(iscores, ['min', 'min', 'min'], pareto_mask)
+                closest_idx = get_closest_to_optimal_point(iscores, ['max', 'max', 'max'], 
+                                                           pareto_mask, ideal_point, anti_ideal_point, distance_metric)
+                __index = closest_idx
+                ideal_point_stats[_i_counterfactuals['explainer'].iloc[__index]] += 1
                 
-                
-                #print(pareto_mask)
                 pareto_front_cfs = _i_counterfactuals['explainer'].to_numpy()[pareto_mask.astype(bool)]
                 
                 for c in pareto_front_cfs:
                     pareto_front_stats[c] += 1
-                
-                
-                
-            elif explainer_name == 'random_choice':
+                    
+                _index = original_index[__index]
+                       
+            elif explainer_name == 'random_choice_before_filtering':
+                # Get random counterfactual from all counterfactuals
+                _index = np.random.permutation(list_of_counterfactuals_df[i].index)[0]
+  
+            elif explainer_name == 'random_choice_on_filtered':
                 # Get random counterfactual from all counterfactuals
                 _index = np.random.permutation(_i_scores.index)[0]
                 
+            elif explainer_name == 'random_choice_on_pareto':                             
+                iscores = _i_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
+    
+                # Apply normalization in each feature
+                iscores = (iscores - iscores.min(axis=0)) / (iscores.max(axis=0) - iscores.min(axis=0))
+                
+                pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
+                _index = np.random.permutation(_i_scores[pareto_mask.astype(bool)].index.to_list())[0]
+            elif explainer_name == 'unweighted_sum_before_filtering':  
+                # Equally weight all scores and add them together to create a collapsed function score
+                # e.g., 1/3  * proximity + 1/3 * discriminative + 1/3 * feasibility
+                original_index = _i_scores.index
+                iscores = list_of_counterfactuals_df[i][['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
+                __index = get_best_by_weighting(iscores, ['min', 'min', 'max'])
+                _index = original_index[__index]
+                
+            elif explainer_name == 'unweighted_sum_on_filtered':  
+                # Equally weight all scores and add them together to create a collapsed function score
+                # e.g., 1/3  * proximity + 1/3 * discriminative + 1/3 * feasibility
+                original_index = _i_scores.index
+                iscores = _i_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
+                __index = get_best_by_weighting(iscores, ['min', 'min', 'max'])
+                _index = original_index[__index]
+                
+            elif explainer_name == 'unweighted_sum_on_pareto':  
+                original_index = _i_scores.index
+                # Equally weight all scores and add them together to create a collapsed function score
+                # e.g., 1/3  * proximity + 1/3 * discriminative + 1/3 * feasibility
+                iscores = _i_scores[['Proximity', 'K_Feasibility(3)', 'DiscriminativePower(9)']].to_numpy()
+                
+                # Apply normalization in each feature
+                iscores = (iscores - iscores.min(axis=0)) / (iscores.max(axis=0) - iscores.min(axis=0))
+                
+                pareto_mask = get_pareto_optimal_mask(iscores, ['min', 'min', 'max'])
+                __index = get_best_by_weighting(iscores[pareto_mask.astype(bool)], ['min', 'min', 'max'])
+
+                # __index = iscores[pareto_mask.astype(bool)].index.to_list()[pareto_index]
+                _index = original_index[__index]
+                
+                         
             elif explainer_name in SUPPLEMENT_METHODS:
                 if ONLY_VALID_MODE:
-                    # _i_counterfactuals = pd.concat([_i_counterfactuals, sup_list_of_valid_counterfactuals_df[i]], ignore_index=True) \
-                    #                         .reset_index(drop=True)
-                    # _i_scores = pd.concat([_i_scores, sup_list_of_valid_scores_df[i]], ignore_index=True)\
-                    #                 .reset_index(drop=True)
                     _i_counterfactuals = sup_list_of_valid_counterfactuals_df[i].copy(deep=True)
                     _i_scores = sup_list_of_valid_scores_df[i].copy(deep=True)
                 else:
@@ -219,8 +292,12 @@ for dataset in DATASETS:
             else:
                 # Get random counterfactual from particular explainer
                 _index = np.random.permutation(_i_scores[_i_counterfactuals['explainer'] == explainer_name].index)[0]
-                
-            _cf = _i_counterfactuals.iloc[_index]
+            
+            # print(_index)
+            # print(_i_counterfactuals.index)
+            # print(len(_i_counterfactuals))
+            # print(explainer_name)
+            _cf = _i_counterfactuals.loc[_index]
             _instability = instability(test_dataset, i, _cf, 
                                        list_of_counterfactuals_df, 
                                        ranges, continous_indices, 
@@ -230,11 +307,17 @@ for dataset in DATASETS:
             _sparsity = sparsity(test_dataset.iloc[i].to_numpy(), _cf.to_numpy(), continous_indices, categorical_indices)
             experiment_scores['sparsity'][explainer_name].append(_sparsity)
             
-            _score = _i_scores.iloc[_index]
+            _score = _i_scores.loc[_index]
             experiment_scores['proximity'][explainer_name].append(_score['Proximity'])
             experiment_scores['k_feasibility_3'][explainer_name].append(_score['K_Feasibility(3)'])
             experiment_scores['discriminative_power_9'][explainer_name].append(_score['DiscriminativePower(9)'])
             experiment_scores['coverage'][explainer_name] += 1
+            
+            
+           
+            # valid_y = list_of_valid_counterfactuals_df[i][list_of_valid_counterfactuals_df[i]['explainer'] == 'dice'].iloc[0][constraints['target_feature']]
+            
+            # experiment_scores['validity'][explainer_name] += int(valid_y != _cf[constraints['target_feature']])
             
             actionable = is_actionable(test_dataset.iloc[i].to_numpy(), _cf.to_numpy(), 
                                        continous_indices, categorical_indices, freeze_indices)
@@ -269,7 +352,7 @@ for dataset in DATASETS:
     # average experiment scores
     for metric_name, v in experiment_scores.items():
         for explainer_name, scores in v.items():
-            if metric_name in ['coverage', 'actionable']:
+            if metric_name in ['coverage', 'actionable', 'validity']:
                 experiment_scores[metric_name][explainer_name] = experiment_scores[metric_name][explainer_name] / len(test_dataset)
             else:
                 experiment_scores[metric_name][explainer_name] = np.mean(scores)
