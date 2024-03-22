@@ -2,7 +2,7 @@
 
 This is a repository for the paper: "Multi-criteria approach for selecting an explanation from the set of counterfactuals produced by an ensemble of explainers". 
 
-The paper is available at: <...>
+The paper is available at: https://arxiv.org/abs/2403.13940
 
 ## 1. Installation
 ```
@@ -52,3 +52,16 @@ To reproduce paper experiments (tested on Ubuntu 20) from scratch follow the ste
 
 
 ***
+## Cite as
+```
+@misc{stepka_multi-criteria_2024,
+	title = {Multi-criteria approach for selecting an explanation from the set of counterfactuals produced by an ensemble of explainers},
+	author = {Stępka, Ignacy and Lango, Mateusz and Stefanowski, Jerzy},
+	publisher = {arXiv},
+	url = {http://arxiv.org/abs/2403.13940},
+	month = mar,
+	year = {2024},
+	keywords = {Computer Science - Machine Learning, Computer Science - Artificial Intelligence},
+}
+```
+
