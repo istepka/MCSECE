@@ -54,14 +54,14 @@ To reproduce paper experiments (tested on Ubuntu 20) from scratch follow the ste
 ***
 ## Cite as
 ```
-@misc{stepka_multi-criteria_2024,
-	title = {Multi-criteria approach for selecting an explanation from the set of counterfactuals produced by an ensemble of explainers},
-	author = {Stępka, Ignacy and Lango, Mateusz and Stefanowski, Jerzy},
-	publisher = {arXiv},
-	url = {http://arxiv.org/abs/2403.13940},
-	month = mar,
-	year = {2024},
-	keywords = {Computer Science - Machine Learning, Computer Science - Artificial Intelligence},
+@article{stepka2024multi,
+  title={A Multi--Criteria Approach for Selecting an Explanation from the Set of Counterfactuals Produced by an Ensemble of Explainers},
+  author={Stepka, Ignacy and Lango, Mateusz and Stefanowski, Jerzy},
+  journal={International Journal of Applied Mathematics and Computer Science},
+  volume={34},
+  number={1},
+  pages={119--133},
+  year={2024}
 }
 ```
 
